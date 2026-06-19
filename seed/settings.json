@@ -1,0 +1,79 @@
+{
+  "nutritionTarget": {
+    "targetCalories": 2985,
+    "proteinPercent": 20,
+    "carbsPercent": 60,
+    "fatPercent": 20,
+    "fiberTargetGrams": 35,
+    "targetMode": "lean_bulk"
+  },
+  "defaultExercises": [
+    "Pull-ups",
+    "Dips",
+    "Pike Push-ups",
+    "Push-ups",
+    "Pistol Squats",
+    "Calf Raises",
+    "Leg Raises"
+  ],
+  "exerciseTargets": [
+    {
+      "id": "pullups-default",
+      "exerciseName": "Pull-ups",
+      "targetSets": 4,
+      "targetRepsPerSet": 15,
+      "targetTotalReps": 60,
+      "targetAddedWeightKg": 0,
+      "targetType": "reps",
+      "progressionRule": "Add weight next time when every target set is completed.",
+      "isActive": true
+    },
+    {
+      "id": "dips-default",
+      "exerciseName": "Dips",
+      "targetSets": 4,
+      "targetRepsPerSet": 15,
+      "targetTotalReps": 60,
+      "targetAddedWeightKg": 0,
+      "targetType": "reps",
+      "progressionRule": "Add weight next time when every target set is completed.",
+      "isActive": true
+    },
+    {
+      "id": "pike-default",
+      "exerciseName": "Pike Push-ups",
+      "targetSets": 4,
+      "targetRepsPerSet": 15,
+      "targetTotalReps": 60,
+      "targetAddedWeightKg": 0,
+      "targetType": "reps",
+      "progressionRule": "Add weight next time when every target set is completed.",
+      "isActive": true
+    },
+    {
+      "id": "pistol-default",
+      "exerciseName": "Pistol Squats",
+      "targetSets": 4,
+      "targetRepsPerSet": 15,
+      "targetTotalReps": 60,
+      "targetAddedWeightKg": 0,
+      "targetType": "reps",
+      "progressionRule": "Complete 4 x 15 per leg, then add difficulty or weight.",
+      "isActive": true
+    },
+    {
+      "id": "calf-default",
+      "exerciseName": "Calf Raises",
+      "targetSets": 4,
+      "targetRepsPerSet": 25,
+      "targetTotalReps": 100,
+      "targetAddedWeightKg": 0,
+      "targetType": "reps",
+      "progressionRule": "Add weight next time when every target set is completed.",
+      "isActive": true
+    }
+  ],
+  "targetMode": "lean_bulk",
+  "theme": "dark"
+}
+

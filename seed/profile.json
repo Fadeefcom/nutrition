@@ -1,0 +1,9 @@
+{
+  "name": "Athlete",
+  "heightCm": null,
+  "age": 30,
+  "sex": "male",
+  "activityMultiplier": 1.55,
+  "timeZone": "Europe/Lisbon",
+  "notes": "Personal fitness diary"
+}

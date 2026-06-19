@@ -1,0 +1,34 @@
+[
+  {
+    "id": "seed-greek-yogurt",
+    "name": "Greek Yogurt",
+    "brand": "Seed",
+    "barcode": "",
+    "servingSizeGrams": 170,
+    "caloriesPer100g": 59,
+    "proteinPer100g": 10,
+    "carbsPer100g": 3.6,
+    "fatPer100g": 0.4,
+    "fiberPer100g": 0,
+    "source": "seed",
+    "notes": "",
+    "createdAt": "2026-01-01T00:00:00Z",
+    "updatedAt": "2026-01-01T00:00:00Z"
+  },
+  {
+    "id": "seed-rolled-oats",
+    "name": "Rolled Oats",
+    "brand": "Seed",
+    "barcode": "",
+    "servingSizeGrams": 50,
+    "caloriesPer100g": 389,
+    "proteinPer100g": 16.9,
+    "carbsPer100g": 66.3,
+    "fatPer100g": 6.9,
+    "fiberPer100g": 10.6,
+    "source": "seed",
+    "notes": "",
+    "createdAt": "2026-01-01T00:00:00Z",
+    "updatedAt": "2026-01-01T00:00:00Z"
+  }
+]

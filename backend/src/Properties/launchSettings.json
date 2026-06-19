@@ -1,0 +1,15 @@
+{
+  "profiles": {
+    "FitnessDiary.Api": {
+      "commandName": "Project",
+      "commandLineArgs": "--port 7071",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development",
+        "AZURE_FUNCTIONS_ENVIRONMENT": "Development",
+        "StorageProvider": "LocalFile",
+        "LocalJsonStoragePath": ".local-data/fitness-diary"
+      }
+    }
+  }
+}
+

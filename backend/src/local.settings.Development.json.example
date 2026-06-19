@@ -1,0 +1,17 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "AZURE_FUNCTIONS_ENVIRONMENT": "Development",
+    "StorageProvider": "LocalFile",
+    "LocalJsonStoragePath": ".local-data/fitness-diary",
+    "BlobContainerName": "fitness-diary",
+    "DiaryPassword": ""
+  },
+  "Host": {
+    "CORS": "http://localhost:5173",
+    "CORSCredentials": false
+  }
+}
+

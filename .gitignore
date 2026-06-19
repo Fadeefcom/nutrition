@@ -1,0 +1,15 @@
+bin/
+obj/
+node_modules/
+dist/
+.vs/
+.local-data/
+.vite/
+.env
+local.settings.json
+local.settings.*.json
+*.user
+*.suo
+*.log
+.DS_Store
+Thumbs.db
