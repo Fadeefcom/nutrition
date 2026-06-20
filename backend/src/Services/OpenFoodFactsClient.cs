@@ -31,13 +31,17 @@ public sealed class OpenFoodFactsClient(HttpClient httpClient)
         product.TryGetProperty("nutriments", out var nutriments);
         var now = DateTimeOffset.UtcNow;
 
+        var servingSize = GetDecimal(product, "serving_quantity") ?? 100;
+
         return new Product
         {
             Id = Guid.NewGuid().ToString("n"),
             Name = GetString(product, "product_name") ?? "Imported product",
             Brand = GetString(product, "brands") ?? "",
             Barcode = barcode,
-            ServingSizeGrams = GetDecimal(product, "serving_quantity") ?? 100,
+            ServingSizeGrams = servingSize,
+            ServingSizeAmount = servingSize,
+            ServingSizeUnit = "g",
             CaloriesPer100g = GetDecimal(nutriments, "energy-kcal_100g", "energy-kcal") ?? 0,
             ProteinPer100g = GetDecimal(nutriments, "proteins_100g", "protein_100g") ?? 0,
             CarbsPer100g = GetDecimal(nutriments, "carbohydrates_100g") ?? 0,
@@ -87,4 +91,3 @@ public sealed class OpenFoodFactsClient(HttpClient httpClient)
         return null;
     }
 }
-

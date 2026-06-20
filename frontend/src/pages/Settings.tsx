@@ -2,10 +2,22 @@ import { Info, Plus, Trash2, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api/client';
+import { BaseDropdown, type DropdownOption } from '../components/BaseDropdown';
 import { EmptyState } from '../components/EmptyState';
 import { Skeleton } from '../components/Skeleton';
-import type { BodyMetric, ExerciseTarget, Profile, Settings as SettingsModel } from '../types/models';
-import { calculateBmi, calculateMaintenanceCalories, macroTargets } from '../utils/calculations';
+import type {
+  BodyMetric,
+  ExerciseTarget,
+  NutritionTarget,
+  Profile,
+  Settings as SettingsModel,
+} from '../types/models';
+import {
+  calculateBmi,
+  calculateFiberTargetGrams,
+  calculateMaintenanceCalories,
+  macroTargets,
+} from '../utils/calculations';
 import { formatShortDate, toIsoDate } from '../utils/date';
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'invalid' | 'error';
@@ -16,6 +28,7 @@ export default function Settings() {
   const [settings, setSettings] = useState<SettingsModel | null>(null);
   const [bodyMetric, setBodyMetric] = useState<BodyMetric | null>(null);
   const [weightInput, setWeightInput] = useState('');
+  const [calorieAdjustmentInput, setCalorieAdjustmentInput] = useState('');
   const [password, setPassword] = useState(() => localStorage.getItem('diary-password') ?? '');
   const [loading, setLoading] = useState(true);
   const [profileStatus, setProfileStatus] = useState<SaveStatus>('idle');
@@ -44,6 +57,20 @@ export default function Settings() {
         setSettings(nextSettings);
         setBodyMetric(nextMetric);
         setWeightInput(nextMetric.weightKg ? String(nextMetric.weightKg) : '');
+        setCalorieAdjustmentInput(
+          String(
+            getCalorieAdjustment(
+              nextSettings.nutritionTarget,
+              calculateMaintenanceCalories({
+                weightKg: nextMetric.weightKg,
+                heightCm: nextProfile.heightCm,
+                age: nextProfile.age,
+                sex: nextProfile.sex,
+                activityMultiplier: nextProfile.activityMultiplier,
+              }),
+            ),
+          ),
+        );
 
         profileSnapshotRef.current = JSON.stringify(nextProfile);
         settingsSnapshotRef.current = JSON.stringify(nextSettings);
@@ -90,6 +117,31 @@ export default function Settings() {
       }),
     [currentWeight, profile?.activityMultiplier, profile?.age, profile?.heightCm, profile?.sex],
   );
+
+  useEffect(() => {
+    if (!settings || loading || !maintenanceCalories) return;
+
+    setSettings((current) => {
+      if (!current) return current;
+
+      const calorieAdjustment = getCalorieAdjustment(current.nutritionTarget, maintenanceCalories);
+      const nutritionTarget = buildEnergyTarget(
+        current.nutritionTarget,
+        maintenanceCalories,
+        calorieAdjustment,
+      );
+
+      if (
+        nutritionTarget.targetCalories === current.nutritionTarget.targetCalories &&
+        nutritionTarget.fiberTargetGrams === current.nutritionTarget.fiberTargetGrams &&
+        nutritionTarget.calorieAdjustment === current.nutritionTarget.calorieAdjustment
+      ) {
+        return current;
+      }
+
+      return { ...current, nutritionTarget };
+    });
+  }, [loading, maintenanceCalories, settings]);
 
   useEffect(() => {
     if (!profile || loading) return;
@@ -227,7 +279,7 @@ export default function Settings() {
               value={profile.heightCm ?? ''}
               onChange={(heightCm) => setProfile({ ...profile, heightCm })}
             />
-            <SelectField
+            <DropdownField
               label="Sex"
               value={profile.sex ?? 'male'}
               onChange={(sex) => setProfile({ ...profile, sex })}
@@ -236,7 +288,7 @@ export default function Settings() {
                 { value: 'female', label: 'Female' },
               ]}
             />
-            <SelectField
+            <DropdownField
               label="Activity"
               value={String(profile.activityMultiplier ?? 1.55)}
               onChange={(activityMultiplier) =>
@@ -318,47 +370,84 @@ export default function Settings() {
             <AutosaveStatus status={settingsStatus} idleLabel="Auto-save enabled" />
           </div>
         </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          <NumberField
-            label="Calories"
-            value={settings.nutritionTarget.targetCalories}
-            helper="Daily target"
-            onChange={(targetCalories) =>
-              setSettings({ ...settings, nutritionTarget: { ...settings.nutritionTarget, targetCalories } })
-            }
-          />
-          <MacroPercentField
-            label="Protein"
-            value={settings.nutritionTarget.proteinPercent}
-            grams={grams?.proteinGrams ?? 0}
-            onChange={(proteinPercent) =>
-              setSettings({ ...settings, nutritionTarget: { ...settings.nutritionTarget, proteinPercent } })
-            }
-          />
-          <MacroPercentField
-            label="Carbs"
-            value={settings.nutritionTarget.carbsPercent}
-            grams={grams?.carbsGrams ?? 0}
-            onChange={(carbsPercent) =>
-              setSettings({ ...settings, nutritionTarget: { ...settings.nutritionTarget, carbsPercent } })
-            }
-          />
-          <MacroPercentField
-            label="Fat"
-            value={settings.nutritionTarget.fatPercent}
-            grams={grams?.fatGrams ?? 0}
-            onChange={(fatPercent) =>
-              setSettings({ ...settings, nutritionTarget: { ...settings.nutritionTarget, fatPercent } })
-            }
-          />
-          <NumberField
-            label="Fiber g"
-            value={settings.nutritionTarget.fiberTargetGrams}
-            helper="Daily grams"
-            onChange={(fiberTargetGrams) =>
-              setSettings({ ...settings, nutritionTarget: { ...settings.nutritionTarget, fiberTargetGrams } })
-            }
-          />
+        <div className="grid gap-3 xl:grid-cols-[minmax(17rem,1fr)_minmax(22rem,1.35fr)_minmax(18rem,1fr)]">
+          <section className="rounded-lg bg-black/5 p-3 dark:bg-white/10">
+            <h3 className="mb-3 text-sm font-black uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Energy Balance
+            </h3>
+            <div className="mb-3 rounded-lg border border-mint/20 bg-mint/10 p-3 dark:border-mint/20 dark:bg-mint/10">
+              <span className="block text-xs font-black uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Daily Target
+              </span>
+              <span className="mt-1 block text-3xl font-black tabular-nums text-zinc-950 dark:text-white">
+                {settings.nutritionTarget.targetCalories} kcal
+              </span>
+            </div>
+            <div className="mb-3 grid grid-cols-2 gap-2">
+              <EnergyMetric
+                label="Maintenance"
+                value={maintenanceCalories ? `${maintenanceCalories} kcal` : 'Need data'}
+              />
+              <EnergyMetric
+                label="Adjustment"
+                value={formatSignedCalories(getCalorieAdjustment(settings.nutritionTarget, maintenanceCalories))}
+              />
+            </div>
+            <CalorieAdjustmentField
+              value={calorieAdjustmentInput}
+              disabled={!maintenanceCalories}
+              onChange={updateCalorieAdjustment}
+            />
+          </section>
+
+          <section className="rounded-lg bg-black/5 p-3 dark:bg-white/10">
+            <h3 className="mb-3 text-sm font-black uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Macro Split
+            </h3>
+            <div className="grid gap-3 md:grid-cols-3">
+              <MacroPercentField
+                label="Protein"
+                value={settings.nutritionTarget.proteinPercent}
+                grams={grams?.proteinGrams ?? 0}
+                onChange={(proteinPercent) =>
+                  setSettings({ ...settings, nutritionTarget: { ...settings.nutritionTarget, proteinPercent } })
+                }
+              />
+              <MacroPercentField
+                label="Carbs"
+                value={settings.nutritionTarget.carbsPercent}
+                grams={grams?.carbsGrams ?? 0}
+                onChange={(carbsPercent) =>
+                  setSettings({ ...settings, nutritionTarget: { ...settings.nutritionTarget, carbsPercent } })
+                }
+              />
+              <MacroPercentField
+                label="Fat"
+                value={settings.nutritionTarget.fatPercent}
+                grams={grams?.fatGrams ?? 0}
+                onChange={(fatPercent) =>
+                  setSettings({ ...settings, nutritionTarget: { ...settings.nutritionTarget, fatPercent } })
+                }
+              />
+            </div>
+          </section>
+
+          <section className="rounded-lg bg-black/5 p-3 dark:bg-white/10">
+            <h3 className="mb-3 text-sm font-black uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Dynamic Metrics
+            </h3>
+            <div className="grid gap-2">
+              <DynamicMetric
+                label="Calculated Fiber"
+                value={`${calculateFiberTargetGrams(settings.nutritionTarget.targetCalories)} g`}
+                helper="*14 g per 1000 kcal"
+                muted
+              />
+              <DynamicMetric label="Calculated Protein" value={`${grams?.proteinGrams ?? 0} g`} />
+              <DynamicMetric label="Calculated Carbs" value={`${grams?.carbsGrams ?? 0} g`} />
+              <DynamicMetric label="Calculated Fat" value={`${grams?.fatGrams ?? 0} g`} />
+            </div>
+          </section>
         </div>
       </section>
 
@@ -589,6 +678,32 @@ export default function Settings() {
     );
   }
 
+  function updateCalorieAdjustment(rawValue: string) {
+    setCalorieAdjustmentInput(rawValue);
+
+    if (rawValue.trim() === '' || rawValue.trim() === '+' || rawValue.trim() === '-') {
+      return;
+    }
+
+    const calorieAdjustment = Number(rawValue);
+    if (!Number.isFinite(calorieAdjustment)) {
+      return;
+    }
+
+    setSettings((current) =>
+      current
+        ? {
+            ...current,
+            nutritionTarget: buildEnergyTarget(
+              current.nutritionTarget,
+              maintenanceCalories,
+              calorieAdjustment,
+            ),
+          }
+        : current,
+    );
+  }
+
   function addTarget() {
     setSettings((current) =>
       current
@@ -625,6 +740,37 @@ export default function Settings() {
         : current,
     );
   }
+}
+
+function getCalorieAdjustment(target: NutritionTarget, maintenanceCalories: number | null) {
+  if (Number.isFinite(target.calorieAdjustment)) {
+    return target.calorieAdjustment;
+  }
+
+  return maintenanceCalories ? target.targetCalories - maintenanceCalories : 0;
+}
+
+function buildEnergyTarget(
+  target: NutritionTarget,
+  maintenanceCalories: number | null,
+  calorieAdjustment: number,
+): NutritionTarget {
+  const safeAdjustment = Math.round(calorieAdjustment);
+  const targetCalories = maintenanceCalories
+    ? Math.max(0, Math.round(maintenanceCalories + safeAdjustment))
+    : target.targetCalories;
+
+  return {
+    ...target,
+    calorieAdjustment: safeAdjustment,
+    targetCalories,
+    fiberTargetGrams: calculateFiberTargetGrams(targetCalories),
+  };
+}
+
+function formatSignedCalories(value: number) {
+  const rounded = Math.round(value);
+  return `${rounded > 0 ? '+' : ''}${rounded} kcal`;
 }
 
 function SettingsGroup({ title, children }: { title: string; children: ReactNode }) {
@@ -695,6 +841,49 @@ function NumberField({
   );
 }
 
+function EnergyMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-h-16 rounded-lg bg-white/55 px-3 py-2 dark:bg-black/15">
+      <span className="block text-xs font-bold text-zinc-500 dark:text-zinc-400">{label}</span>
+      <span className="mt-1 block text-sm font-black tabular-nums text-zinc-950 dark:text-white">
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function CalorieAdjustmentField({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="text-sm font-bold">
+      <span className="mb-1 block text-zinc-500 dark:text-zinc-400">Calorie Adjustment</span>
+      <div className="relative">
+        <input
+          className="field w-full pr-16 disabled:opacity-60"
+          disabled={disabled}
+          inputMode="numeric"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="+300"
+        />
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400">
+          kcal
+        </span>
+      </div>
+      <span className="mt-1 block text-xs font-normal text-zinc-500 dark:text-zinc-400">
+        +300 kcal for lean mass gain.
+      </span>
+    </label>
+  );
+}
+
 function MacroPercentField({
   label,
   value,
@@ -727,7 +916,39 @@ function MacroPercentField({
   );
 }
 
-function SelectField({
+function DynamicMetric({
+  label,
+  value,
+  helper,
+  muted = false,
+}: {
+  label: string;
+  value: string;
+  helper?: string;
+  muted?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-lg border px-3 py-2 ${
+        muted
+          ? 'border-black/10 bg-zinc-950/[0.035] dark:border-white/10 dark:bg-zinc-950/25'
+          : 'border-transparent bg-white/55 dark:bg-black/15'
+      }`}
+    >
+      <div className="flex min-h-6 items-center justify-between gap-3">
+        <span className="text-sm font-bold text-zinc-500 dark:text-zinc-400">{label}</span>
+        <span className="text-sm font-black tabular-nums text-zinc-950 dark:text-white">{value}</span>
+      </div>
+      {helper ? (
+        <span className="mt-1 block text-xs font-normal text-zinc-500 dark:text-zinc-400">
+          {helper}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function DropdownField({
   label,
   value,
   onChange,
@@ -736,18 +957,12 @@ function SelectField({
   label: string;
   value: string;
   onChange: (value: string) => void;
-  options: Array<{ value: string; label: string }>;
+  options: Array<DropdownOption<string>>;
 }) {
   return (
     <label className="text-sm font-bold">
       <span className="mb-1 block text-zinc-500 dark:text-zinc-400">{label}</span>
-      <select className="field w-full" value={value} onChange={(event) => onChange(event.target.value)}>
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      <BaseDropdown options={options} value={value} onChange={(nextValue) => onChange(nextValue)} />
     </label>
   );
 }

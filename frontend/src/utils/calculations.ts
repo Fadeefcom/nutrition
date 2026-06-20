@@ -17,8 +17,12 @@ export function macroTargets(target: NutritionTarget): MacroTargets {
     proteinGrams: Math.round((target.targetCalories * target.proteinPercent) / 100 / 4),
     carbsGrams: Math.round((target.targetCalories * target.carbsPercent) / 100 / 4),
     fatGrams: Math.round((target.targetCalories * target.fatPercent) / 100 / 9),
-    fiberGrams: target.fiberTargetGrams,
+    fiberGrams: calculateFiberTargetGrams(target.targetCalories),
   };
+}
+
+export function calculateFiberTargetGrams(targetCalories: number) {
+  return Math.round((Math.max(0, targetCalories) / 1000) * 14);
 }
 
 export function nutritionTotals(entries: NutritionEntry[]): NutritionTotals {

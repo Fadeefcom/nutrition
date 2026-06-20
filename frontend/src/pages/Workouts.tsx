@@ -1,17 +1,15 @@
 import {
-  Check,
-  ChevronDown,
   Dumbbell,
   Hash,
   ListChecks,
   Plus,
   Save,
-  Search,
   Trash2,
 } from 'lucide-react';
-import type { FocusEvent, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client';
+import { BaseDropdown, type DropdownOption } from '../components/BaseDropdown';
 import { EmptyState } from '../components/EmptyState';
 import { Skeleton } from '../components/Skeleton';
 import { StatusPill } from '../components/StatusPill';
@@ -410,86 +408,33 @@ function ExerciseCombobox({
   onChange: (value: string) => void;
   placeholder: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const normalizedQuery = query.trim().toLowerCase();
-  const filteredOptions = normalizedQuery
-    ? options.filter((option) => option.toLowerCase().includes(normalizedQuery))
-    : options;
-  const hasExactMatch = options.some((option) => option.toLowerCase() === normalizedQuery);
-  const createName = query.trim();
-  const canCreateNamed = Boolean(createName && !hasExactMatch);
-
-  const closeIfFocusLeaves = (event: FocusEvent<HTMLDivElement>) => {
-    const nextTarget = event.relatedTarget;
-    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
-      return;
-    }
-    setOpen(false);
-    setQuery('');
-  };
-
-  const commit = (exerciseName: string) => {
-    onChange(exerciseName);
-    setOpen(false);
-    setQuery('');
-  };
+  const dropdownOptions = useMemo<Array<DropdownOption<string>>>(() => {
+    const baseOptions = options.map((option) => ({ label: option, value: option }));
+    return value && !options.includes(value)
+      ? [{ label: value, value }, ...baseOptions]
+      : baseOptions;
+  }, [options, value]);
 
   return (
-    <div className="relative" onBlur={closeIfFocusLeaves}>
-      <button
-        className="field flex w-full items-center justify-between gap-2 text-left"
-        onClick={() => {
-          setOpen((current) => !current);
-          setQuery('');
-        }}
-        type="button"
-      >
-        <span className={value ? 'truncate font-bold' : 'truncate text-zinc-400'}>
-          {value || placeholder}
-        </span>
-        <ChevronDown size={16} className="shrink-0 text-zinc-500 dark:text-zinc-400" />
-      </button>
-
-      {open ? (
-        <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-30 max-h-72 overflow-hidden rounded-lg border border-black/10 bg-white shadow-2xl dark:border-white/10 dark:bg-[#191b1f]">
-          <label className="relative block border-b border-black/10 p-2 dark:border-white/10">
-            <Search
-              size={15}
-              className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-zinc-400"
-            />
-            <input
-              autoFocus
-              className="field h-9 min-h-9 w-full pl-9"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search exercises"
-            />
-          </label>
-
-          <div className="max-h-44 overflow-y-auto py-1">
-            {filteredOptions.length > 0 ? (
-              filteredOptions.map((option) => (
-                <button
-                  key={option}
-                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm font-semibold transition hover:bg-black/5 dark:hover:bg-white/10"
-                  onClick={() => commit(option)}
-                  type="button"
-                >
-                  <span className="truncate">{option}</span>
-                  {option === value ? <Check size={15} className="shrink-0 text-mint" /> : null}
-                </button>
-              ))
-            ) : (
-              <p className="px-3 py-3 text-sm text-zinc-500 dark:text-zinc-400">No matches</p>
-            )}
-          </div>
-
-          <div className="sticky bottom-0 border-t border-black/10 bg-white p-2 dark:border-white/10 dark:bg-[#191b1f]">
+    <BaseDropdown
+      options={dropdownOptions}
+      value={value}
+      onChange={(nextExerciseName) => onChange(nextExerciseName)}
+      placeholder={placeholder}
+      searchable
+      searchPlaceholder="Search exercises"
+      footer={({ searchQuery, close }) => {
+        const createName = searchQuery.trim();
+        const hasExactMatch = options.some((option) => option.toLowerCase() === createName.toLowerCase());
+        const canCreateNamed = Boolean(createName && !hasExactMatch);
+        return (
             <button
               className="btn btn-ghost h-9 w-full justify-start"
               disabled={Boolean(createName && hasExactMatch)}
-              onClick={() => commit(canCreateNamed ? createName : 'New Exercise')}
+              onClick={() => {
+                onChange(canCreateNamed ? createName : 'New Exercise');
+                close();
+              }}
               type="button"
             >
               <Plus size={15} />
@@ -499,10 +444,9 @@ function ExerciseCombobox({
                   ? 'Exercise already exists'
                   : 'Create new exercise'}
             </button>
-          </div>
-        </div>
-      ) : null}
-    </div>
+        );
+      }}
+    />
   );
 }
 

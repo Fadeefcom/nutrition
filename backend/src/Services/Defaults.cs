@@ -35,6 +35,7 @@ public static class Defaults
     public static NutritionTarget NutritionTarget() => new()
     {
         TargetCalories = 2985,
+        CalorieAdjustment = 300,
         ProteinPercent = 20,
         CarbsPercent = 60,
         FatPercent = 20,
@@ -58,6 +59,8 @@ public static class Defaults
             Name = "Greek Yogurt",
             Brand = "Seed",
             ServingSizeGrams = 170,
+            ServingSizeAmount = 170,
+            ServingSizeUnit = "g",
             CaloriesPer100g = 59,
             ProteinPer100g = 10,
             CarbsPer100g = 3.6m,
@@ -70,6 +73,8 @@ public static class Defaults
             Name = "Rolled Oats",
             Brand = "Seed",
             ServingSizeGrams = 50,
+            ServingSizeAmount = 50,
+            ServingSizeUnit = "g",
             CaloriesPer100g = 389,
             ProteinPer100g = 16.9m,
             CarbsPer100g = 66.3m,

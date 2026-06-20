@@ -23,6 +23,7 @@ public sealed record Settings
 public sealed record NutritionTarget
 {
     public int TargetCalories { get; init; } = 2985;
+    public int CalorieAdjustment { get; init; } = 300;
     public decimal ProteinPercent { get; init; } = 20;
     public decimal CarbsPercent { get; init; } = 60;
     public decimal FatPercent { get; init; } = 20;
@@ -59,6 +60,9 @@ public sealed record Product
     public string Brand { get; init; } = "";
     public string Barcode { get; init; } = "";
     public decimal ServingSizeGrams { get; init; } = 100;
+    public decimal? ServingSizeAmount { get; init; }
+    public string? ServingSizeUnit { get; init; }
+    public List<ProductCustomServing> CustomServings { get; init; } = [];
     public decimal CaloriesPer100g { get; init; }
     public decimal ProteinPer100g { get; init; }
     public decimal CarbsPer100g { get; init; }
@@ -68,6 +72,14 @@ public sealed record Product
     public string Notes { get; init; } = "";
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; init; } = DateTimeOffset.UtcNow;
+}
+
+public sealed record ProductCustomServing
+{
+    public string Id { get; init; } = Guid.NewGuid().ToString("n");
+    public string Name { get; init; } = "";
+    public decimal Amount { get; init; }
+    public string? Unit { get; init; }
 }
 
 public sealed record NutritionEntry

@@ -14,6 +14,9 @@ function blankProduct(barcode = ''): Product {
     brand: '',
     barcode,
     servingSizeGrams: 100,
+    servingSizeAmount: 100,
+    servingSizeUnit: 'g',
+    customServings: [],
     caloriesPer100g: 0,
     proteinPer100g: 0,
     carbsPer100g: 0,
@@ -193,32 +196,39 @@ export default function Products() {
           <Input label="Brand" value={form.brand} onChange={(brand) => setForm({ ...form, brand })} />
           <Input label="Barcode" value={form.barcode} onChange={(value) => setForm({ ...form, barcode: value })} />
           <NumberInput
-            label="Serving grams"
+            label="Serving size"
             value={form.servingSizeGrams}
-            onChange={(servingSizeGrams) => setForm({ ...form, servingSizeGrams })}
+            onChange={(servingSizeGrams) =>
+              setForm({
+                ...form,
+                servingSizeGrams,
+                servingSizeAmount: servingSizeGrams,
+                servingSizeUnit: 'g',
+              })
+            }
           />
           <NumberInput
-            label="Calories / 100g"
+            label="Calories"
             value={form.caloriesPer100g}
             onChange={(caloriesPer100g) => setForm({ ...form, caloriesPer100g })}
           />
           <NumberInput
-            label="Protein / 100g"
+            label="Protein"
             value={form.proteinPer100g}
             onChange={(proteinPer100g) => setForm({ ...form, proteinPer100g })}
           />
           <NumberInput
-            label="Carbs / 100g"
+            label="Carbs"
             value={form.carbsPer100g}
             onChange={(carbsPer100g) => setForm({ ...form, carbsPer100g })}
           />
           <NumberInput
-            label="Fat / 100g"
+            label="Fat"
             value={form.fatPer100g}
             onChange={(fatPer100g) => setForm({ ...form, fatPer100g })}
           />
           <NumberInput
-            label="Fiber / 100g"
+            label="Fiber"
             value={form.fiberPer100g}
             onChange={(fiberPer100g) => setForm({ ...form, fiberPer100g })}
           />
@@ -272,4 +282,3 @@ function NumberInput({
     </label>
   );
 }
-

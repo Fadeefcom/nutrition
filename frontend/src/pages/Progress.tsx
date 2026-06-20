@@ -1,5 +1,5 @@
 import { RefreshCw } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bar,
   CartesianGrid,
@@ -12,6 +12,7 @@ import {
   YAxis,
 } from 'recharts';
 import { api } from '../api/client';
+import { BaseDropdown, type DropdownOption } from '../components/BaseDropdown';
 import { ChartFrame } from '../components/ChartFrame';
 import { EmptyState } from '../components/EmptyState';
 import { Skeleton } from '../components/Skeleton';
@@ -23,6 +24,7 @@ import { withForecast } from '../utils/forecast';
 type NutritionOverlay = 'bodyWeightKg' | 'protein';
 type TrainingMetric = 'volume' | `exercise:${string}`;
 type ChartRow = Record<string, string | number | null | undefined>;
+type MovingAverageConfig = { sourceKey: string; targetKey: string; digits?: number };
 type NutritionOverlayConfig = {
   key: string;
   forecastKey: string;
@@ -32,6 +34,28 @@ type NutritionOverlayConfig = {
 };
 
 const MOVING_AVERAGE_DAYS = 7;
+const CHART_MARGIN = { top: 8, right: 8, left: 0, bottom: 0 };
+const CHART_RESIZE_DEBOUNCE_MS = 120;
+const CALORIES_COLOR = '#ff6b4a';
+const PROTEIN_COLOR = '#45d09e';
+const BODY_WEIGHT_COLOR = '#4db7d8';
+const VOLUME_BAR_COLOR = '#f5c451';
+const VOLUME_FORECAST_COLOR = '#a16207';
+const RADIUS: [number, number, number, number] = [5, 5, 0, 0];
+
+const NUTRITION_AVERAGE_CONFIGS: MovingAverageConfig[] = [
+  { sourceKey: 'calories', targetKey: 'caloriesAvg', digits: 0 },
+  { sourceKey: 'protein', targetKey: 'proteinAvg', digits: 1 },
+  { sourceKey: 'bodyWeightKg', targetKey: 'bodyWeightAvg', digits: 1 },
+];
+
+const WORKOUT_VOLUME_AVERAGE_CONFIGS: MovingAverageConfig[] = [
+  { sourceKey: 'workoutVolume', targetKey: 'workoutVolumeAvg', digits: 0 },
+];
+
+const SELECTED_EXERCISE_AVERAGE_CONFIGS: MovingAverageConfig[] = [
+  { sourceKey: 'reps', targetKey: 'repsAvg', digits: 1 },
+];
 
 export default function Progress() {
   const [summary, setSummary] = useState<ProgressSummary | null>(null);
@@ -39,27 +63,60 @@ export default function Progress() {
   const [nutritionOverlay, setNutritionOverlay] = useState<NutritionOverlay>('bodyWeightKg');
   const [trainingMetric, setTrainingMetric] = useState<TrainingMetric>('volume');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const requestIdRef = useRef(0);
 
-  const load = async () => {
-    setLoading(true);
+  const load = useCallback(async (showSkeleton = false) => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+
+    if (showSkeleton) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
+
     setError('');
+
     try {
       const [nextSummary, nextSettings] = await Promise.all([
         api.progressSummary(84, toIsoDate()),
         api.settings(),
       ]);
+
+      if (requestIdRef.current !== requestId) return;
+
       setSummary(nextSummary);
       setSettings(nextSettings);
     } catch (err) {
+      if (requestIdRef.current !== requestId) return;
       setError(err instanceof Error ? err.message : 'Unable to load progress.');
     } finally {
+      if (requestIdRef.current !== requestId) return;
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    void load();
+    void load(true);
+  }, [load]);
+
+  const handleRefresh = useCallback(() => {
+    void load(false);
+  }, [load]);
+
+  const handleRetry = useCallback(() => {
+    void load(true);
+  }, [load]);
+
+  const selectBodyWeight = useCallback(() => {
+    setNutritionOverlay('bodyWeightKg');
+  }, []);
+
+  const selectProtein = useCallback(() => {
+    setNutritionOverlay('protein');
   }, []);
 
   const exerciseNames = useMemo(
@@ -85,39 +142,36 @@ export default function Progress() {
 
     const averaged = withMovingAverages(
       summary.days,
-      [
-        { sourceKey: 'calories', targetKey: 'caloriesAvg', digits: 0 },
-        { sourceKey: 'protein', targetKey: 'proteinAvg', digits: 1 },
-        { sourceKey: 'bodyWeightKg', targetKey: 'bodyWeightAvg', digits: 1 },
-      ],
+      NUTRITION_AVERAGE_CONFIGS,
       MOVING_AVERAGE_DAYS,
     );
 
-    return withForecast(averaged, [
-      'caloriesAvg',
-      nutritionOverlay === 'protein' ? 'proteinAvg' : 'bodyWeightAvg',
-    ]);
-  }, [nutritionOverlay, summary]);
+    return withForecast(averaged, ['caloriesAvg', 'proteinAvg', 'bodyWeightAvg']);
+  }, [summary]);
 
   const workoutVolumeTrendData = useMemo(() => {
     if (!summary) return [];
 
     const averaged = withMovingAverages(
       summary.days,
-      [{ sourceKey: 'workoutVolume', targetKey: 'workoutVolumeAvg', digits: 0 }],
+      WORKOUT_VOLUME_AVERAGE_CONFIGS,
       MOVING_AVERAGE_DAYS,
     );
 
     return withForecast(averaged, ['workoutVolumeAvg']);
   }, [summary]);
 
-  const selectedExerciseName =
-    trainingMetric === 'volume' ? null : exerciseNameFromMetric(trainingMetric);
+  const selectedExerciseName = useMemo(
+    () => (trainingMetric === 'volume' ? null : exerciseNameFromMetric(trainingMetric)),
+    [trainingMetric],
+  );
 
   const selectedExerciseTarget = useMemo(() => {
     if (!settings || !selectedExerciseName) return null;
+    const selectedExerciseNameLower = selectedExerciseName.toLowerCase();
+
     return settings.exerciseTargets.find(
-      (target) => target.exerciseName.toLowerCase() === selectedExerciseName.toLowerCase(),
+      (target) => target.exerciseName.toLowerCase() === selectedExerciseNameLower,
     ) ?? null;
   }, [selectedExerciseName, settings]);
 
@@ -134,46 +188,95 @@ export default function Progress() {
 
     const averaged = withMovingAverages(
       rows,
-      [{ sourceKey: 'reps', targetKey: 'repsAvg', digits: 1 }],
+      SELECTED_EXERCISE_AVERAGE_CONFIGS,
       MOVING_AVERAGE_DAYS,
     );
 
     return withForecast(averaged, ['repsAvg']);
   }, [selectedExerciseName, summary]);
 
-  const nutritionOverlayConfig: NutritionOverlayConfig =
-    nutritionOverlay === 'protein'
-      ? {
-          key: 'proteinAvg',
-          forecastKey: 'proteinAvgForecast',
-          label: 'Protein 7d avg',
-          color: '#45d09e',
-        }
-      : {
-          key: 'bodyWeightAvg',
-          forecastKey: 'bodyWeightAvgForecast',
-          label: 'Body weight 7d avg',
-          color: '#4db7d8',
-          domain: ['dataMin - 1', 'dataMax + 1'],
-        };
+  const nutritionOverlayConfig: NutritionOverlayConfig = useMemo(
+    () => (
+      nutritionOverlay === 'protein'
+        ? {
+            key: 'proteinAvg',
+            forecastKey: 'proteinAvgForecast',
+            label: 'Protein 7d avg',
+            color: PROTEIN_COLOR,
+          }
+        : {
+            key: 'bodyWeightAvg',
+            forecastKey: 'bodyWeightAvgForecast',
+            label: 'Body weight 7d avg',
+            color: BODY_WEIGHT_COLOR,
+            domain: ['dataMin - 1', 'dataMax + 1'],
+          }
+    ),
+    [nutritionOverlay],
+  );
 
-  const trainingData =
-    trainingMetric === 'volume' ? workoutVolumeTrendData : selectedExerciseTrendData;
+  const trainingData = trainingMetric === 'volume' ? workoutVolumeTrendData : selectedExerciseTrendData;
 
-  const hasNutritionData = hasMetricData(nutritionTrendData, [
-    'caloriesAvg',
-    nutritionOverlayConfig.key,
-  ]);
-  const hasTrainingData =
-    trainingMetric === 'volume'
-      ? hasMetricData(workoutVolumeTrendData, ['workoutVolumeAvg'])
-      : hasMetricData(selectedExerciseTrendData, ['repsAvg']);
+  const hasNutritionData = useMemo(
+    () => hasMetricData(nutritionTrendData, ['caloriesAvg', nutritionOverlayConfig.key]),
+    [nutritionOverlayConfig.key, nutritionTrendData],
+  );
 
-  const selectedExerciseTargetReps =
-    selectedExerciseTarget?.targetTotalReps
-    || (selectedExerciseTarget
-      ? selectedExerciseTarget.targetSets * selectedExerciseTarget.targetRepsPerSet
-      : 0);
+  const hasTrainingData = useMemo(
+    () => (
+      trainingMetric === 'volume'
+        ? hasMetricData(workoutVolumeTrendData, ['workoutVolumeAvg'])
+        : hasMetricData(selectedExerciseTrendData, ['repsAvg'])
+    ),
+    [selectedExerciseTrendData, trainingMetric, workoutVolumeTrendData],
+  );
+
+  const selectedExerciseTargetReps = selectedExerciseTarget
+    ? selectedExerciseTarget.targetTotalReps
+      ?? selectedExerciseTarget.targetSets * selectedExerciseTarget.targetRepsPerSet
+    : 0;
+
+  const nutritionActions = useMemo(
+    () => (
+      <div className="inline-flex rounded-lg bg-black/5 p-1 dark:bg-white/10">
+        <PillButton
+          active={nutritionOverlay === 'bodyWeightKg'}
+          label="Body Weight"
+          onClick={selectBodyWeight}
+        />
+        <PillButton
+          active={nutritionOverlay === 'protein'}
+          label="Protein"
+          onClick={selectProtein}
+        />
+      </div>
+    ),
+    [nutritionOverlay, selectBodyWeight, selectProtein],
+  );
+
+  const trainingActions = useMemo(
+    () => {
+      const metricOptions: Array<DropdownOption<TrainingMetric>> = [
+        { value: 'volume', label: 'Total volume' },
+        ...exerciseNames.map((exerciseName) => ({
+          value: `exercise:${exerciseName}` as TrainingMetric,
+          label: exerciseName,
+        })),
+      ];
+
+      return (
+        <BaseDropdown
+          className="w-full min-w-40 max-w-56"
+          options={metricOptions}
+          value={trainingMetric}
+          onChange={(nextMetric) => setTrainingMetric(nextMetric)}
+          placeholder="Metric"
+          searchPlaceholder="Search metrics"
+        />
+      );
+    },
+    [exerciseNames, trainingMetric],
+  );
 
   if (loading) {
     return <Skeleton className="h-[70vh]" />;
@@ -183,8 +286,8 @@ export default function Progress() {
     return (
       <section className="panel p-5">
         <p className="font-bold text-ember">{error || 'Progress data unavailable.'}</p>
-        <button className="btn btn-primary mt-4" onClick={load}>
-          <RefreshCw size={16} />
+        <button className="btn btn-primary mt-4" disabled={refreshing} onClick={handleRetry}>
+          <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
           Retry
         </button>
       </section>
@@ -201,8 +304,8 @@ export default function Progress() {
             </p>
             <h1 className="text-2xl font-black">Progress</h1>
           </div>
-          <button className="btn btn-ghost" onClick={load}>
-            <RefreshCw size={16} />
+          <button className="btn btn-ghost" disabled={refreshing} onClick={handleRefresh}>
+            <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
             Refresh
           </button>
         </div>
@@ -212,95 +315,15 @@ export default function Progress() {
         <ChartFrame
           title="Nutrition & Body Trend"
           contentClassName={hasNutritionData ? 'h-80 min-h-80' : ''}
-          actions={
-            <div className="inline-flex rounded-lg bg-black/5 p-1 dark:bg-white/10">
-              <PillButton
-                active={nutritionOverlay === 'bodyWeightKg'}
-                label="Body Weight"
-                onClick={() => setNutritionOverlay('bodyWeightKg')}
-              />
-              <PillButton
-                active={nutritionOverlay === 'protein'}
-                label="Protein"
-                onClick={() => setNutritionOverlay('protein')}
-              />
-            </div>
-          }
+          actions={nutritionActions}
         >
           {hasNutritionData ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={nutritionTrendData}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.18} />
-                <XAxis dataKey="date" tickFormatter={formatShortDate} minTickGap={22} />
-                <YAxis yAxisId="calories" />
-                <YAxis
-                  yAxisId="overlay"
-                  orientation="right"
-                  domain={nutritionOverlayConfig.domain}
-                />
-                <Tooltip labelFormatter={formatShortDate} />
-                {targets ? (
-                  <ReferenceArea
-                    yAxisId="calories"
-                    y1={targets.calories * 0.95}
-                    y2={targets.calories * 1.05}
-                    fill="#ff6b4a"
-                    fillOpacity={0.09}
-                    strokeOpacity={0}
-                  />
-                ) : null}
-                {targets && nutritionOverlay === 'protein' ? (
-                  <ReferenceArea
-                    yAxisId="overlay"
-                    y1={targets.proteinGrams * 0.95}
-                    y2={targets.proteinGrams * 1.05}
-                    fill="#45d09e"
-                    fillOpacity={0.08}
-                    strokeOpacity={0}
-                  />
-                ) : null}
-                <Bar
-                  yAxisId="calories"
-                  dataKey="caloriesAvg"
-                  name="Calories 7d avg"
-                  fill="#ff6b4a"
-                  fillOpacity={0.3}
-                  radius={[5, 5, 0, 0]}
-                />
-                <Line
-                  yAxisId="calories"
-                  type="monotone"
-                  dataKey="caloriesAvgForecast"
-                  name="Calories forecast"
-                  stroke="#ff6b4a"
-                  strokeWidth={2}
-                  strokeDasharray="5 5"
-                  dot={false}
-                  connectNulls
-                />
-                <Line
-                  yAxisId="overlay"
-                  type="monotone"
-                  dataKey={nutritionOverlayConfig.key}
-                  name={nutritionOverlayConfig.label}
-                  stroke={nutritionOverlayConfig.color}
-                  strokeWidth={2.4}
-                  dot={false}
-                  connectNulls
-                />
-                <Line
-                  yAxisId="overlay"
-                  type="monotone"
-                  dataKey={nutritionOverlayConfig.forecastKey}
-                  name={`${nutritionOverlayConfig.label} forecast`}
-                  stroke={nutritionOverlayConfig.color}
-                  strokeWidth={2}
-                  strokeDasharray="5 5"
-                  dot={false}
-                  connectNulls
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
+            <NutritionChart
+              data={nutritionTrendData}
+              overlay={nutritionOverlay}
+              overlayConfig={nutritionOverlayConfig}
+              targets={targets}
+            />
           ) : (
             <CompactEmpty title="No nutrition or body history yet" />
           )}
@@ -309,82 +332,14 @@ export default function Progress() {
         <ChartFrame
           title="Training Load"
           contentClassName={hasTrainingData ? 'h-80 min-h-80' : ''}
-          actions={
-            <select
-              className="field h-9 min-h-9 w-full min-w-40 max-w-56 py-1 text-xs font-bold"
-              value={trainingMetric}
-              onChange={(event) => setTrainingMetric(event.target.value as TrainingMetric)}
-            >
-              <option value="volume">Total volume</option>
-              {exerciseNames.map((exerciseName) => (
-                <option key={exerciseName} value={`exercise:${exerciseName}`}>
-                  {exerciseName}
-                </option>
-              ))}
-            </select>
-          }
+          actions={trainingActions}
         >
           {hasTrainingData ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={trainingData}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.18} />
-                <XAxis dataKey="date" tickFormatter={formatShortDate} minTickGap={22} />
-                <YAxis />
-                <Tooltip labelFormatter={formatShortDate} />
-                {trainingMetric === 'volume' ? (
-                  <>
-                    <Bar
-                      dataKey="workoutVolumeAvg"
-                      name="Volume 7d avg"
-                      fill="#f5c451"
-                      fillOpacity={0.45}
-                      radius={[5, 5, 0, 0]}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="workoutVolumeAvgForecast"
-                      name="Volume forecast"
-                      stroke="#a16207"
-                      strokeWidth={2}
-                      strokeDasharray="5 5"
-                      dot={false}
-                      connectNulls
-                    />
-                  </>
-                ) : (
-                  <>
-                    {selectedExerciseTargetReps > 0 ? (
-                      <ReferenceArea
-                        y1={selectedExerciseTargetReps * 0.95}
-                        y2={selectedExerciseTargetReps * 1.05}
-                        fill="#45d09e"
-                        fillOpacity={0.08}
-                        strokeOpacity={0}
-                      />
-                    ) : null}
-                    <Line
-                      type="monotone"
-                      dataKey="repsAvg"
-                      name="Reps 7d avg"
-                      stroke="#45d09e"
-                      strokeWidth={2.4}
-                      dot={false}
-                      connectNulls
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="repsAvgForecast"
-                      name="Reps forecast"
-                      stroke="#45d09e"
-                      strokeWidth={2}
-                      strokeDasharray="5 5"
-                      dot={false}
-                      connectNulls
-                    />
-                  </>
-                )}
-              </ComposedChart>
-            </ResponsiveContainer>
+            <TrainingChart
+              data={trainingData}
+              metric={trainingMetric}
+              selectedExerciseTargetReps={selectedExerciseTargetReps}
+            />
           ) : (
             <CompactEmpty
               title={
@@ -400,7 +355,183 @@ export default function Progress() {
   );
 }
 
-function PillButton({
+const NutritionChart = memo(function NutritionChart({
+  data,
+  overlay,
+  overlayConfig,
+  targets,
+}: {
+  data: ChartRow[];
+  overlay: NutritionOverlay;
+  overlayConfig: NutritionOverlayConfig;
+  targets: ReturnType<typeof macroTargets> | null;
+}) {
+  return (
+    <ResponsiveContainer width="100%" height="100%" debounce={CHART_RESIZE_DEBOUNCE_MS}>
+      <ComposedChart data={data} margin={CHART_MARGIN}>
+        <CartesianGrid strokeDasharray="3 3" opacity={0.18} />
+        <XAxis dataKey="date" tickFormatter={formatShortDate} minTickGap={22} />
+        <YAxis yAxisId="calories" width={42} />
+        <YAxis
+          yAxisId="overlay"
+          orientation="right"
+          width={42}
+          domain={overlayConfig.domain}
+        />
+        <Tooltip labelFormatter={formatShortDate} isAnimationActive={false} />
+        {targets ? (
+          <ReferenceArea
+            yAxisId="calories"
+            y1={targets.calories * 0.95}
+            y2={targets.calories * 1.05}
+            fill={CALORIES_COLOR}
+            fillOpacity={0.09}
+            strokeOpacity={0}
+          />
+        ) : null}
+        {targets && overlay === 'protein' ? (
+          <ReferenceArea
+            yAxisId="overlay"
+            y1={targets.proteinGrams * 0.95}
+            y2={targets.proteinGrams * 1.05}
+            fill={PROTEIN_COLOR}
+            fillOpacity={0.08}
+            strokeOpacity={0}
+          />
+        ) : null}
+        <Bar
+          yAxisId="calories"
+          dataKey="caloriesAvg"
+          name="Calories 7d avg"
+          fill={CALORIES_COLOR}
+          fillOpacity={0.3}
+          radius={RADIUS}
+          isAnimationActive={false}
+        />
+        <Line
+          yAxisId="calories"
+          type="monotone"
+          dataKey="caloriesAvgForecast"
+          name="Calories forecast"
+          stroke={CALORIES_COLOR}
+          strokeWidth={2}
+          strokeDasharray="5 5"
+          dot={false}
+          activeDot={false}
+          connectNulls
+          isAnimationActive={false}
+        />
+        <Line
+          yAxisId="overlay"
+          type="monotone"
+          dataKey={overlayConfig.key}
+          name={overlayConfig.label}
+          stroke={overlayConfig.color}
+          strokeWidth={2.4}
+          dot={false}
+          activeDot={false}
+          connectNulls
+          isAnimationActive={false}
+        />
+        <Line
+          yAxisId="overlay"
+          type="monotone"
+          dataKey={overlayConfig.forecastKey}
+          name={`${overlayConfig.label} forecast`}
+          stroke={overlayConfig.color}
+          strokeWidth={2}
+          strokeDasharray="5 5"
+          dot={false}
+          activeDot={false}
+          connectNulls
+          isAnimationActive={false}
+        />
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+});
+
+const TrainingChart = memo(function TrainingChart({
+  data,
+  metric,
+  selectedExerciseTargetReps,
+}: {
+  data: ChartRow[];
+  metric: TrainingMetric;
+  selectedExerciseTargetReps: number;
+}) {
+  return (
+    <ResponsiveContainer width="100%" height="100%" debounce={CHART_RESIZE_DEBOUNCE_MS}>
+      <ComposedChart data={data} margin={CHART_MARGIN}>
+        <CartesianGrid strokeDasharray="3 3" opacity={0.18} />
+        <XAxis dataKey="date" tickFormatter={formatShortDate} minTickGap={22} />
+        <YAxis width={42} />
+        <Tooltip labelFormatter={formatShortDate} isAnimationActive={false} />
+        {metric === 'volume' ? (
+          <>
+            <Bar
+              dataKey="workoutVolumeAvg"
+              name="Volume 7d avg"
+              fill={VOLUME_BAR_COLOR}
+              fillOpacity={0.45}
+              radius={RADIUS}
+              isAnimationActive={false}
+            />
+            <Line
+              type="monotone"
+              dataKey="workoutVolumeAvgForecast"
+              name="Volume forecast"
+              stroke={VOLUME_FORECAST_COLOR}
+              strokeWidth={2}
+              strokeDasharray="5 5"
+              dot={false}
+              activeDot={false}
+              connectNulls
+              isAnimationActive={false}
+            />
+          </>
+        ) : (
+          <>
+            {selectedExerciseTargetReps > 0 ? (
+              <ReferenceArea
+                y1={selectedExerciseTargetReps * 0.95}
+                y2={selectedExerciseTargetReps * 1.05}
+                fill={PROTEIN_COLOR}
+                fillOpacity={0.08}
+                strokeOpacity={0}
+              />
+            ) : null}
+            <Line
+              type="monotone"
+              dataKey="repsAvg"
+              name="Reps 7d avg"
+              stroke={PROTEIN_COLOR}
+              strokeWidth={2.4}
+              dot={false}
+              activeDot={false}
+              connectNulls
+              isAnimationActive={false}
+            />
+            <Line
+              type="monotone"
+              dataKey="repsAvgForecast"
+              name="Reps forecast"
+              stroke={PROTEIN_COLOR}
+              strokeWidth={2}
+              strokeDasharray="5 5"
+              dot={false}
+              activeDot={false}
+              connectNulls
+              isAnimationActive={false}
+            />
+          </>
+        )}
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+});
+
+const PillButton = memo(function PillButton({
   active,
   label,
   onClick,
@@ -422,34 +553,50 @@ function PillButton({
       {label}
     </button>
   );
-}
+});
 
-function CompactEmpty({ title }: { title: string }) {
+const CompactEmpty = memo(function CompactEmpty({ title }: { title: string }) {
   return (
     <EmptyState title={title}>
       <span>Data will appear here after saved history exists.</span>
     </EmptyState>
   );
-}
+});
 
 function withMovingAverages<T extends object>(
   rows: T[],
-  configs: Array<{ sourceKey: string; targetKey: string; digits?: number }>,
+  configs: MovingAverageConfig[],
   windowSize: number,
 ) {
+  const sums = configs.map(() => 0);
+  const counts = configs.map(() => 0);
+
   return rows.map((row, index) => {
-    const next: ChartRow = { ...(row as ChartRow) };
+    const sourceRow = row as ChartRow;
+    const next: ChartRow = { ...sourceRow };
 
-    for (const config of configs) {
-      const values = rows
-        .slice(Math.max(0, index - windowSize + 1), index + 1)
-        .map((item) => asNumber((item as ChartRow)[config.sourceKey]))
-        .filter((value): value is number => value !== null);
+    configs.forEach((config, configIndex) => {
+      const currentValue = asNumber(sourceRow[config.sourceKey]);
 
-      next[config.targetKey] = values.length
-        ? round(values.reduce((sum, value) => sum + value, 0) / values.length, config.digits ?? 1)
+      if (currentValue !== null) {
+        sums[configIndex] += currentValue;
+        counts[configIndex] += 1;
+      }
+
+      if (index >= windowSize) {
+        const outgoingRow = rows[index - windowSize] as ChartRow;
+        const outgoingValue = asNumber(outgoingRow[config.sourceKey]);
+
+        if (outgoingValue !== null) {
+          sums[configIndex] -= outgoingValue;
+          counts[configIndex] -= 1;
+        }
+      }
+
+      next[config.targetKey] = counts[configIndex]
+        ? round(sums[configIndex] / counts[configIndex], config.digits ?? 1)
         : null;
-    }
+    });
 
     return next;
   });

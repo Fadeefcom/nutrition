@@ -22,6 +22,7 @@ export interface Settings {
 
 export interface NutritionTarget {
   targetCalories: number;
+  calorieAdjustment: number;
   proteinPercent: number;
   carbsPercent: number;
   fatPercent: number;
@@ -55,6 +56,9 @@ export interface Product {
   brand: string;
   barcode: string;
   servingSizeGrams: number;
+  servingSizeAmount?: number | null;
+  servingSizeUnit?: string | null;
+  customServings?: ProductCustomServing[];
   caloriesPer100g: number;
   proteinPer100g: number;
   carbsPer100g: number;
@@ -64,6 +68,13 @@ export interface Product {
   notes: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ProductCustomServing {
+  id: string;
+  name: string;
+  amount: number;
+  unit?: string | null;
 }
 
 export interface NutritionEntry {

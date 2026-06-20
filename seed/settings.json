@@ -1,6 +1,7 @@
 {
   "nutritionTarget": {
     "targetCalories": 2985,
+    "calorieAdjustment": 300,
     "proteinPercent": 20,
     "carbsPercent": 60,
     "fatPercent": 20,
@@ -76,4 +77,3 @@
   "targetMode": "lean_bulk",
   "theme": "dark"
 }
-

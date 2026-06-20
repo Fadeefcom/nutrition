@@ -4,13 +4,15 @@ namespace FitnessDiary.Api.Services;
 
 public static class DiaryCalculations
 {
+    private const decimal FiberGramsPer1000Calories = 14m;
+
     public static MacroTargets MacroTargets(NutritionTarget target) => new()
     {
         Calories = target.TargetCalories,
         ProteinGrams = Math.Round(target.TargetCalories * target.ProteinPercent / 100m / 4m, 0),
         CarbsGrams = Math.Round(target.TargetCalories * target.CarbsPercent / 100m / 4m, 0),
         FatGrams = Math.Round(target.TargetCalories * target.FatPercent / 100m / 9m, 0),
-        FiberGrams = target.FiberTargetGrams
+        FiberGrams = Math.Round(Math.Max(0, target.TargetCalories) / 1000m * FiberGramsPer1000Calories, 0)
     };
 
     public static DailyNutrition Normalize(DailyNutrition day)

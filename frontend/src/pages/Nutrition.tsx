@@ -1,17 +1,14 @@
 import {
   Barcode,
   Camera,
-  Check,
-  ChevronDown,
   Plus,
   Save,
-  Search,
   Trash2,
   X,
 } from 'lucide-react';
-import type { FocusEvent } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api/client';
+import { BaseDropdown, type DropdownOption } from '../components/BaseDropdown';
 import { EmptyState } from '../components/EmptyState';
 import { ProgressRing } from '../components/ProgressRing';
 import { Skeleton } from '../components/Skeleton';
@@ -20,6 +17,12 @@ import { entryFromProduct, macroTargets, normalizeNutrition, round } from '../ut
 import { toIsoDate } from '../utils/date';
 
 const now = () => new Date().toISOString();
+const mealOptions: Array<DropdownOption<string>> = [
+  { value: 'breakfast', label: 'Breakfast' },
+  { value: 'lunch', label: 'Lunch' },
+  { value: 'dinner', label: 'Dinner' },
+  { value: 'snack', label: 'Snack' },
+];
 
 function blankProduct(seed = ''): Product {
   const trimmed = seed.trim();
@@ -30,6 +33,9 @@ function blankProduct(seed = ''): Product {
     brand: '',
     barcode,
     servingSizeGrams: 100,
+    servingSizeAmount: 100,
+    servingSizeUnit: 'g',
+    customServings: [],
     caloriesPer100g: 0,
     proteinPer100g: 0,
     carbsPer100g: 0,
@@ -58,6 +64,7 @@ export default function Nutrition() {
   const [productSaving, setProductSaving] = useState(false);
   const [barcodeLoading, setBarcodeLoading] = useState(false);
   const [error, setError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -88,6 +95,17 @@ export default function Nutrition() {
   const selectedProduct = useMemo(
     () => products.find((product) => product.id === productId) ?? null,
     [productId, products],
+  );
+  const productOptions = useMemo<Array<DropdownOption<string>>>(
+    () =>
+      products.map((product) => ({
+        value: product.id,
+        label: productLabel(product),
+        description: [product.barcode, `${product.caloriesPer100g} kcal / 100g`]
+          .filter(Boolean)
+          .join(' | '),
+      })),
+    [products],
   );
 
   const save = async () => {
@@ -178,30 +196,81 @@ export default function Nutrition() {
 
       <section className="panel relative z-40 p-4">
         <div className="grid gap-3 md:grid-cols-[10rem_minmax(0,1fr)_8rem_auto]">
-          <select className="field" value={mealType} onChange={(event) => setMealType(event.target.value)}>
-            <option value="breakfast">Breakfast</option>
-            <option value="lunch">Lunch</option>
-            <option value="dinner">Dinner</option>
-            <option value="snack">Snack</option>
-          </select>
+          <BaseDropdown
+            options={mealOptions}
+            value={mealType}
+            onChange={(nextMealType) => setMealType(nextMealType)}
+            placeholder="Meal"
+          />
 
-          <SmartProductInput
-            products={products}
-            query={productQuery}
-            selectedProductId={productId}
-            barcodeLoading={barcodeLoading}
-            onQueryChange={(query) => {
-              setProductQuery(query);
-              setProductId('');
+          <div className="flex min-w-0 gap-2">
+            <BaseDropdown
+              className="flex-1"
+              options={productOptions}
+              value={productId}
+              onChange={(nextProductId) => {
+                const product = products.find((item) => item.id === nextProductId);
+                setProductId(nextProductId);
+                setProductQuery(product ? productLabel(product) : '');
+                setProductFormOpen(false);
+              }}
+              placeholder="Search product, type barcode, or create new"
+              searchable
+              searchPlaceholder="Search products"
+              emptyLabel="No options found"
+              footer={({ searchQuery, close }) => {
+                const query = searchQuery.trim();
+                return isBarcodeLike(query) ? (
+                  <button
+                    className="btn btn-ghost h-9 w-full justify-start"
+                    disabled={barcodeLoading}
+                    onClick={() => {
+                      close();
+                      setProductQuery(query);
+                      lookupBarcode(query);
+                    }}
+                    type="button"
+                  >
+                    <Barcode size={15} />
+                    Lookup barcode {query}
+                  </button>
+                ) : (
+                  <button
+                    className="btn btn-ghost h-9 w-full justify-start"
+                    disabled={!query}
+                    onClick={() => {
+                      close();
+                      setProductQuery(query);
+                      openProductDraft(query);
+                    }}
+                    type="button"
+                  >
+                    <Plus size={15} />
+                    {query ? `Create "${query}"` : 'Type to create product'}
+                  </button>
+                );
+              }}
+            />
+            <button
+              className="btn btn-ghost h-10 w-10 shrink-0 px-0"
+              onClick={() => fileInputRef.current?.click()}
+              title="Photo AI draft"
+              type="button"
+            >
+              <Camera size={15} />
+            </button>
+          </div>
+
+          <input
+            ref={fileInputRef}
+            className="hidden"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={(event) => {
+              openCameraDraft(event.target.files?.[0] ?? null);
+              event.target.value = '';
             }}
-            onSelectProduct={(product) => {
-              setProductId(product.id);
-              setProductQuery(productLabel(product));
-              setProductFormOpen(false);
-            }}
-            onCreateFromQuery={() => openProductDraft(productQuery)}
-            onBarcodeLookup={lookupBarcode}
-            onCameraCapture={openCameraDraft}
           />
 
           <label className="relative">
@@ -214,9 +283,6 @@ export default function Nutrition() {
               onChange={(event) => setGrams(Number(event.target.value))}
               placeholder="100"
             />
-            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-black text-zinc-400">
-              g
-            </span>
           </label>
 
           <button className="btn btn-primary" onClick={addEntry} disabled={!selectedProduct}>
@@ -339,11 +405,17 @@ export default function Nutrition() {
   }
 
   async function saveProduct() {
+    const serving = getProductServing(productForm);
     const product = {
       ...productForm,
       name: productForm.name.trim(),
       brand: productForm.brand.trim(),
       barcode: productForm.barcode.trim(),
+      servingSizeGrams:
+        serving.unit === null || serving.unit === 'g' ? serving.amount : productForm.servingSizeGrams,
+      servingSizeAmount: serving.amount,
+      servingSizeUnit: serving.unit,
+      customServings: productForm.customServings ?? [],
       updatedAt: now(),
     };
 
@@ -370,188 +442,6 @@ export default function Nutrition() {
       setProductSaving(false);
     }
   }
-}
-
-function SmartProductInput({
-  products,
-  query,
-  selectedProductId,
-  barcodeLoading,
-  onQueryChange,
-  onSelectProduct,
-  onCreateFromQuery,
-  onBarcodeLookup,
-  onCameraCapture,
-}: {
-  products: Product[];
-  query: string;
-  selectedProductId: string;
-  barcodeLoading: boolean;
-  onQueryChange: (query: string) => void;
-  onSelectProduct: (product: Product) => void;
-  onCreateFromQuery: () => void;
-  onBarcodeLookup: (barcode?: string) => void;
-  onCameraCapture: (file?: File | null) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const normalizedQuery = query.trim().toLowerCase();
-  const filteredProducts = normalizedQuery
-    ? products.filter((product) =>
-        [product.name, product.brand, product.barcode, product.source]
-          .filter(Boolean)
-          .some((part) => part.toLowerCase().includes(normalizedQuery)),
-      )
-    : products.slice(0, 12);
-  const exactProduct = normalizedQuery
-    ? products.find((product) =>
-        [productLabel(product), product.name, product.barcode].some(
-          (part) => part.trim().toLowerCase() === normalizedQuery,
-        ),
-      )
-    : undefined;
-  const canCreate = Boolean(query.trim() && !exactProduct);
-
-  const closeIfFocusLeaves = (event: FocusEvent<HTMLDivElement>) => {
-    const nextTarget = event.relatedTarget;
-    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
-      return;
-    }
-    setOpen(false);
-  };
-
-  return (
-    <div className="relative min-w-0" onBlur={closeIfFocusLeaves}>
-      <div className="field flex items-center gap-2 px-2">
-        <Search size={16} className="shrink-0 text-zinc-400" />
-        <input
-          className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none"
-          value={query}
-          onChange={(event) => {
-            onQueryChange(event.target.value);
-            setOpen(true);
-          }}
-          onFocus={() => setOpen(true)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              if (exactProduct) {
-                onSelectProduct(exactProduct);
-                setOpen(false);
-              } else if (isBarcodeLike(query)) {
-                setOpen(false);
-                onBarcodeLookup(query);
-              } else if (canCreate) {
-                setOpen(false);
-                onCreateFromQuery();
-              }
-            }
-          }}
-          placeholder="Search product, type barcode, or create new"
-        />
-        <button
-          className="btn btn-ghost h-8 w-8 shrink-0 px-0"
-          disabled={barcodeLoading}
-          onClick={() => {
-            setOpen(false);
-            onBarcodeLookup(query);
-          }}
-          title="Barcode lookup"
-          type="button"
-        >
-          <Barcode size={15} />
-        </button>
-        <button
-          className="btn btn-ghost h-8 w-8 shrink-0 px-0"
-          onClick={() => fileInputRef.current?.click()}
-          title="Photo AI draft"
-          type="button"
-        >
-          <Camera size={15} />
-        </button>
-        <button
-          className="h-8 w-6 shrink-0 text-zinc-500 dark:text-zinc-400"
-          onClick={() => setOpen((current) => !current)}
-          title="Open products"
-          type="button"
-        >
-          <ChevronDown size={16} />
-        </button>
-      </div>
-
-      <input
-        ref={fileInputRef}
-        className="hidden"
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onChange={(event) => {
-          setOpen(false);
-          onCameraCapture(event.target.files?.[0] ?? null);
-          event.target.value = '';
-        }}
-      />
-
-      {open ? (
-        <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-50 max-h-80 overflow-hidden rounded-lg border border-black/10 bg-white shadow-2xl dark:border-white/10 dark:bg-[#191b1f]">
-          <div className="max-h-56 overflow-y-auto py-1">
-            {filteredProducts.length > 0 ? (
-              filteredProducts.map((product) => (
-                <button
-                  key={product.id}
-                  className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left text-sm transition hover:bg-black/5 dark:hover:bg-white/10"
-                  onClick={() => {
-                    onSelectProduct(product);
-                    setOpen(false);
-                  }}
-                  type="button"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate font-bold">{productLabel(product)}</span>
-                    <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">
-                      {[product.barcode, `${product.caloriesPer100g} kcal / 100g`].filter(Boolean).join(' | ')}
-                    </span>
-                  </span>
-                  {product.id === selectedProductId ? <Check size={15} className="shrink-0 text-mint" /> : null}
-                </button>
-              ))
-            ) : (
-              <p className="px-3 py-3 text-sm text-zinc-500 dark:text-zinc-400">No products found</p>
-            )}
-          </div>
-
-          <div className="sticky bottom-0 border-t border-black/10 bg-white p-2 dark:border-white/10 dark:bg-[#191b1f]">
-            {isBarcodeLike(query) ? (
-              <button
-                className="btn btn-ghost h-9 w-full justify-start"
-                onClick={() => {
-                  setOpen(false);
-                  onBarcodeLookup(query);
-                }}
-                type="button"
-              >
-                <Barcode size={15} />
-                Lookup barcode {query.trim()}
-              </button>
-            ) : (
-              <button
-                className="btn btn-ghost h-9 w-full justify-start"
-                disabled={!canCreate}
-                onClick={() => {
-                  setOpen(false);
-                  onCreateFromQuery();
-                }}
-                type="button"
-              >
-                <Plus size={15} />
-                {canCreate ? `Create "${query.trim()}"` : 'Type to create product'}
-              </button>
-            )}
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
 }
 
 function ProductEditor({
@@ -591,43 +481,197 @@ function ProductEditor({
         <TextField label="Name" value={product.name} onChange={(name) => onChange({ ...product, name })} />
         <TextField label="Brand" value={product.brand} onChange={(brand) => onChange({ ...product, brand })} />
         <TextField label="Barcode" value={product.barcode} onChange={(barcode) => onChange({ ...product, barcode })} />
-        <NumberField
-          label="Serving grams"
-          value={product.servingSizeGrams}
-          onChange={(servingSizeGrams) => onChange({ ...product, servingSizeGrams })}
+        <AdaptiveServingField
+          product={product}
+          onChange={onChange}
         />
         <NumberField
-          label="Calories / 100g"
+          label="Calories"
           value={product.caloriesPer100g}
           onChange={(caloriesPer100g) => onChange({ ...product, caloriesPer100g })}
         />
         <NumberField
-          label="Protein / 100g"
+          label="Protein"
           value={product.proteinPer100g}
           onChange={(proteinPer100g) => onChange({ ...product, proteinPer100g })}
         />
         <NumberField
-          label="Carbs / 100g"
+          label="Carbs"
           value={product.carbsPer100g}
           onChange={(carbsPer100g) => onChange({ ...product, carbsPer100g })}
         />
         <NumberField
-          label="Fat / 100g"
+          label="Fat"
           value={product.fatPer100g}
           onChange={(fatPer100g) => onChange({ ...product, fatPer100g })}
         />
         <NumberField
-          label="Fiber / 100g"
+          label="Fiber"
           value={product.fiberPer100g}
           onChange={(fiberPer100g) => onChange({ ...product, fiberPer100g })}
         />
       </div>
-      <textarea
-        className="field mt-3 min-h-20 w-full py-3"
-        value={product.notes}
-        onChange={(event) => onChange({ ...product, notes: event.target.value })}
-        placeholder="Notes"
-      />
+    </div>
+  );
+}
+
+function AdaptiveServingField({
+  product,
+  onChange,
+}: {
+  product: Product;
+  onChange: (product: Product) => void;
+}) {
+  const parsedServing = getProductServing(product);
+  const [draft, setDraft] = useState(() => formatServingValue(parsedServing.amount, parsedServing.unit));
+  const [error, setError] = useState('');
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customName, setCustomName] = useState('');
+  const [customAmount, setCustomAmount] = useState('');
+
+  useEffect(() => {
+    setDraft(formatServingValue(parsedServing.amount, parsedServing.unit));
+    setError('');
+  }, [parsedServing.amount, parsedServing.unit]);
+
+  const commitServing = () => {
+    const parsed = parseServingValue(draft);
+    if (!parsed) {
+      setError('Enter an amount like 100 g, 250 ml, or 1 scoop.');
+      return;
+    }
+
+    setError('');
+    setDraft(formatServingValue(parsed.amount, parsed.unit));
+    onChange({
+      ...product,
+      servingSizeGrams: parsed.unit === null || parsed.unit === 'g' ? parsed.amount : product.servingSizeGrams,
+      servingSizeAmount: parsed.amount,
+      servingSizeUnit: parsed.unit,
+    });
+  };
+
+  const saveCustomServing = () => {
+    const parsedAmount = parseAmountValue(customAmount);
+    if (!customName.trim() || parsedAmount === null) {
+      return;
+    }
+
+    onChange({
+      ...product,
+      customServings: [
+        ...(product.customServings ?? []),
+        {
+          id: crypto.randomUUID(),
+          name: customName.trim(),
+          amount: parsedAmount,
+          unit: parsedServing.unit,
+        },
+      ],
+    });
+    setCustomName('');
+    setCustomAmount('');
+    setCustomOpen(false);
+  };
+
+  const customPreviewAmount = parseAmountValue(customAmount);
+  const customPreviewValue =
+    customPreviewAmount === null ? customAmount.trim() || '0' : formatAmount(customPreviewAmount);
+  const normalizedCustomName = customName.trim() || 'Serving';
+
+  return (
+    <div className="text-sm font-bold">
+      <label>
+        <span className="mb-1 block text-zinc-500 dark:text-zinc-400">Serving size</span>
+        <input
+          className={`field w-full ${error ? 'border-ember focus:border-ember focus:ring-ember/30' : ''}`}
+          value={draft}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            setError('');
+          }}
+          onBlur={commitServing}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              commitServing();
+            }
+          }}
+          placeholder="100 g"
+        />
+      </label>
+      {error ? <p className="mt-1 text-xs font-semibold text-ember">{error}</p> : null}
+
+      {!customOpen ? (
+        <button
+          className="mt-2 text-xs font-black text-mint transition hover:text-mint/80"
+          onClick={() => setCustomOpen(true)}
+          type="button"
+        >
+          + Add custom serving
+        </button>
+      ) : (
+        <div className="mt-2 rounded-lg border border-black/10 bg-black/5 p-3 dark:border-white/10 dark:bg-black/15">
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem]">
+            <label>
+              <span className="mb-1 block text-xs text-zinc-500 dark:text-zinc-400">Serving name</span>
+              <input
+                className="field min-h-10 w-full"
+                value={customName}
+                onChange={(event) => setCustomName(event.target.value)}
+                placeholder="Scoop"
+              />
+            </label>
+            <label>
+              <span className="mb-1 block text-xs text-zinc-500 dark:text-zinc-400">Equivalent amount</span>
+              <input
+                className="field min-h-10 w-full"
+                inputMode="decimal"
+                value={customAmount}
+                onChange={(event) => setCustomAmount(event.target.value)}
+                placeholder="30"
+              />
+            </label>
+          </div>
+          <p className="mt-2 text-xs font-normal text-zinc-500 dark:text-zinc-400">
+            1 {normalizedCustomName} = {customPreviewValue}{formatUnitSuffix(parsedServing.unit)}
+          </p>
+          <div className="mt-3 flex gap-2">
+            <button
+              className="btn btn-primary h-9"
+              disabled={!customName.trim() || customPreviewAmount === null}
+              onClick={saveCustomServing}
+              type="button"
+            >
+              Save
+            </button>
+            <button
+              className="btn btn-ghost h-9"
+              onClick={() => {
+                setCustomOpen(false);
+                setCustomName('');
+                setCustomAmount('');
+              }}
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(product.customServings ?? []).length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {(product.customServings ?? []).map((serving) => (
+            <span
+              key={serving.id}
+              className="rounded-md bg-black/5 px-2 py-1 text-xs font-bold text-zinc-600 dark:bg-white/10 dark:text-zinc-300"
+            >
+              1 {serving.name} = {formatServingValue(serving.amount, serving.unit)}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -663,6 +707,63 @@ function NumberField({
       />
     </label>
   );
+}
+
+type ParsedServing = {
+  amount: number;
+  unit: string | null;
+};
+
+function getProductServing(product: Product): ParsedServing {
+  const hasAdaptiveServing = product.servingSizeAmount !== undefined && product.servingSizeAmount !== null;
+  const amount = hasAdaptiveServing && Number.isFinite(product.servingSizeAmount)
+    ? Number(product.servingSizeAmount)
+    : product.servingSizeGrams;
+
+  return {
+    amount,
+    unit: hasAdaptiveServing ? normalizeServingUnit(product.servingSizeUnit) : 'g',
+  };
+}
+
+function parseServingValue(value: string): ParsedServing | null {
+  const match = value.trim().match(/^([+-]?(?:\d+(?:[.,]\d+)?|[.,]\d+))\s*([^\d\s].*)?$/);
+  if (!match) return null;
+
+  const amount = parseAmountValue(match[1]);
+  if (amount === null) return null;
+
+  return {
+    amount,
+    unit: normalizeServingUnit(match[2] ?? null),
+  };
+}
+
+function parseAmountValue(value: string) {
+  const normalized = value.trim().replace(',', '.');
+  if (!normalized) return null;
+
+  const amount = Number(normalized);
+  return Number.isFinite(amount) && amount >= 0 ? amount : null;
+}
+
+function normalizeServingUnit(unit?: string | null) {
+  const normalized = unit?.trim().replace(/\s+/g, ' ').toLowerCase() ?? '';
+  return normalized || null;
+}
+
+function formatServingValue(amount: number, unit?: string | null) {
+  return `${formatAmount(amount)}${formatUnitSuffix(unit)}`;
+}
+
+function formatUnitSuffix(unit?: string | null) {
+  const normalized = normalizeServingUnit(unit);
+  return normalized ? ` ${normalized}` : '';
+}
+
+function formatAmount(value: number) {
+  if (!Number.isFinite(value)) return '0';
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(3))).replace(/\.?0+$/, '');
 }
 
 function Metric({ label, value }: { label: string; value: number | string }) {
