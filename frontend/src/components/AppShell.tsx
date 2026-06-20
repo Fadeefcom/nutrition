@@ -75,11 +75,11 @@ export function AppShell({
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 pb-28 pt-5 lg:ml-64 lg:px-8 lg:pb-10">
+      <main className="mx-auto max-w-7xl px-4 pt-5 lg:ml-64 lg:px-8 lg:pb-10" style={{ paddingBottom: 'max(7rem, calc(7rem + env(safe-area-inset-bottom)))' }}>
         {children}
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-40 grid grid-cols-6 border-t border-black/10 bg-white/85 px-2 py-2 backdrop-blur-xl dark:border-white/10 dark:bg-black/35 lg:hidden">
+      <nav className="pb-safe-nav fixed bottom-0 left-0 right-0 z-40 grid grid-cols-6 border-t border-black/10 bg-white/85 px-2 pt-2 backdrop-blur-xl dark:border-white/10 dark:bg-black/35 lg:hidden">
         {items.map((item) => (
           <NavButton
             key={item.id}

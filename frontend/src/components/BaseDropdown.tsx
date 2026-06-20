@@ -187,18 +187,18 @@ export function BaseDropdown<T>({
   const menu = open ? (
     <div
       ref={menuRef}
-      className={`flex flex-col overflow-hidden rounded-lg border border-[#444] bg-[#2a2a2a] text-[#eee] shadow-[0_18px_45px_rgba(0,0,0,0.34)] ${menuClassName}`}
+      className={`flex flex-col overflow-hidden rounded-lg border border-black/10 bg-white text-zinc-900 shadow-[0_18px_45px_rgba(15,23,42,0.14)] dark:border-white/10 dark:bg-[#191b1f] dark:text-zinc-100 dark:shadow-[0_18px_45px_rgba(0,0,0,0.38)] ${menuClassName}`}
       style={menuStyle}
     >
       {shouldSearch ? (
-        <label className="relative block border-b border-[#444] p-2">
+        <label className="relative block border-b border-black/10 p-2 dark:border-white/10">
           <Search
             size={15}
-            className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-zinc-500"
+            className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500"
           />
           <input
             ref={searchInputRef}
-            className="min-h-9 w-full rounded-md border border-[#444] bg-[#222] py-1 pl-9 pr-3 text-sm font-semibold text-[#eee] outline-none transition placeholder:text-zinc-500 focus:border-mint focus:ring-2 focus:ring-mint/25"
+            className="min-h-9 w-full rounded-md border border-black/10 bg-white py-1 pl-9 pr-3 text-sm font-semibold text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-mint focus:ring-2 focus:ring-mint/25 dark:border-white/10 dark:bg-white/10 dark:text-white dark:placeholder:text-zinc-500"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             onKeyDown={handleKeyDown}
@@ -216,7 +216,7 @@ export function BaseDropdown<T>({
               <button
                 key={String(option.value)}
                 className={`flex min-h-10 w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition ${
-                  active ? 'bg-[#333]' : 'hover:bg-[#333]'
+                  active ? 'bg-zinc-100 dark:bg-white/10' : 'hover:bg-zinc-100 dark:hover:bg-white/10'
                 } ${option.disabled ? 'cursor-not-allowed opacity-45' : ''}`}
                 disabled={option.disabled}
                 role="option"
@@ -230,7 +230,7 @@ export function BaseDropdown<T>({
                   <span className="min-w-0">
                     <span className="block truncate font-semibold">{option.label}</span>
                     {option.description ? (
-                      <span className="block truncate text-xs text-zinc-400">{option.description}</span>
+                      <span className="block truncate text-xs text-zinc-400 dark:text-zinc-500">{option.description}</span>
                     ) : null}
                   </span>
                 </span>
@@ -239,14 +239,14 @@ export function BaseDropdown<T>({
             );
           })
         ) : (
-          <div className="min-h-10 px-3 py-2 text-sm font-semibold text-zinc-500">
+          <div className="min-h-10 px-3 py-2 text-sm font-semibold text-zinc-400 dark:text-zinc-500">
             {emptyLabel}
           </div>
         )}
       </div>
 
       {footer ? (
-        <div className="shrink-0 border-t border-[#444] bg-[#2a2a2a] p-2">
+        <div className="shrink-0 border-t border-black/10 bg-white p-2 dark:border-white/10 dark:bg-[#191b1f]">
           {footer({ searchQuery, close })}
         </div>
       ) : null}
@@ -256,7 +256,7 @@ export function BaseDropdown<T>({
   return (
     <div ref={rootRef} className={`relative min-w-0 ${className}`}>
       <button
-        className={`flex min-h-10 w-full items-center justify-between gap-2 rounded-lg border border-[#444] bg-[#222] px-3 text-left text-sm font-semibold text-[#eee] outline-none transition hover:bg-[#262626] focus:border-mint focus:ring-2 focus:ring-mint/30 disabled:cursor-not-allowed disabled:opacity-60 ${triggerClassName}`}
+        className={`flex min-h-10 w-full items-center justify-between gap-2 rounded-lg border border-black/10 bg-white px-3 text-left text-sm font-semibold text-zinc-900 outline-none transition hover:bg-zinc-50 focus:border-mint focus:ring-2 focus:ring-mint/30 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15 ${triggerClassName}`}
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}

@@ -9,6 +9,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
 import { motion } from 'framer-motion';
 import type { FormEvent } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -20,6 +21,8 @@ import { Skeleton } from '../components/Skeleton';
 import type { DailyNutrition, Product, Settings } from '../types/models';
 import { entryFromProduct, macroTargets, normalizeNutrition, round } from '../utils/calculations';
 import { addDays, formatShortDate, toIsoDate } from '../utils/date';
+
+const MEAL_ORDER = ['breakfast', 'lunch', 'dinner', 'snack'] as const;
 
 const now = () => new Date().toISOString();
 const mealOptions: Array<DropdownOption<string>> = [
@@ -71,6 +74,7 @@ export default function Nutrition() {
   const [nutritionSaving, setNutritionSaving] = useState(false);
   const [productSaving, setProductSaving] = useState(false);
   const [barcodeLoading, setBarcodeLoading] = useState(false);
+  const [barcodeScannerOpen, setBarcodeScannerOpen] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const dateInputRef = useRef<HTMLInputElement | null>(null);
@@ -311,8 +315,8 @@ export default function Nutrition() {
             />
             <button
               className="btn btn-ghost h-10 w-10 shrink-0 px-0"
-              onClick={() => fileInputRef.current?.click()}
-              title="Photo AI draft"
+              onClick={() => setBarcodeScannerOpen(true)}
+              title="Scan barcode"
               type="button"
             >
               <Camera size={15} />
@@ -364,6 +368,17 @@ export default function Nutrition() {
             onSave={saveProduct}
           />
         ) : null}
+
+        {barcodeScannerOpen ? (
+          <BarcodeScannerModal
+            onDetect={(code) => {
+              setBarcodeScannerOpen(false);
+              setProductQuery(code);
+              lookupBarcode(code);
+            }}
+            onClose={() => setBarcodeScannerOpen(false)}
+          />
+        ) : null}
       </section>
 
       <section className="panel relative z-0 p-4">
@@ -371,33 +386,52 @@ export default function Nutrition() {
         {normalized.entries.length === 0 ? (
           <EmptyState title="No food logged for this day" />
         ) : (
-          <div className="space-y-2">
-            {normalized.entries.map((entry) => (
-              <div
-                key={entry.id}
-                className="grid gap-2 rounded-lg border border-black/10 p-3 dark:border-white/10 md:grid-cols-[1fr_5rem_5rem_5rem_5rem_auto]"
-              >
-                <div>
-                  <p className="font-bold">{entry.productName}</p>
-                  <p className="text-xs uppercase text-zinc-500 dark:text-zinc-400">
-                    {[entry.mealType, entry.servingLabel].filter(Boolean).join(' · ')}
-                  </p>
+          (() => {
+            const activeGroups = MEAL_ORDER
+              .map((meal) => ({
+                meal,
+                entries: normalized.entries.filter((e) => e.mealType === meal),
+              }))
+              .filter((g) => g.entries.length > 0);
+
+            return activeGroups.map((group, groupIndex) => (
+              <div key={group.meal}>
+                <p className="mb-2 text-xs font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+                  {group.meal}
+                </p>
+                <div className="space-y-2">
+                  {group.entries.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="grid gap-2 rounded-lg border border-black/10 p-3 dark:border-white/10 md:grid-cols-[1fr_5rem_5rem_5rem_5rem_auto]"
+                    >
+                      <div>
+                        <p className="font-bold">{entry.productName}</p>
+                        <p className="text-xs uppercase text-zinc-500 dark:text-zinc-400">
+                          {entry.servingLabel ?? ''}
+                        </p>
+                      </div>
+                      <Metric label={entry.amountUnit || 'g'} value={entry.displayAmount ?? entry.grams} />
+                      <Metric label="kcal" value={entry.calories} />
+                      <Metric label="P" value={entry.protein} />
+                      <Metric label="C/F" value={`${entry.carbs}/${entry.fat}`} />
+                      <button
+                        className="btn btn-ghost h-11 w-11 px-0"
+                        disabled={nutritionSaving}
+                        onClick={() => removeEntry(entry.id)}
+                        title="Delete entry"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-                <Metric label={entry.amountUnit || 'g'} value={entry.displayAmount ?? entry.grams} />
-                <Metric label="kcal" value={entry.calories} />
-                <Metric label="P" value={entry.protein} />
-                <Metric label="C/F" value={`${entry.carbs}/${entry.fat}`} />
-                <button
-                  className="btn btn-ghost h-11 w-11 px-0"
-                  disabled={nutritionSaving}
-                  onClick={() => removeEntry(entry.id)}
-                  title="Delete entry"
-                >
-                  <Trash2 size={16} />
-                </button>
+                {groupIndex < activeGroups.length - 1 ? (
+                  <hr className="my-4 border-dashed border-black/15 dark:border-white/15" />
+                ) : null}
               </div>
-            ))}
-          </div>
+            ));
+          })()
         )}
       </section>
       </motion.div>

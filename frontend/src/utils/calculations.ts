@@ -135,6 +135,68 @@ export function statusDot(state: StatusState) {
   }
 }
 
+type StatusContext = 'fullDay' | 'calories' | 'protein' | 'workout';
+
+export function statusLabel(state: StatusState, context: StatusContext): string {
+  switch (context) {
+    case 'fullDay':
+      switch (state) {
+        case 'green': return 'Perfect day';
+        case 'yellow': return 'Partial';
+        case 'red': return 'Off track';
+        default: return 'No data';
+      }
+    case 'calories':
+      switch (state) {
+        case 'green': return 'On target';
+        case 'yellow': return 'Close';
+        case 'red': return 'Missed';
+        default: return 'No data';
+      }
+    case 'protein':
+      switch (state) {
+        case 'green': return 'Goal met';
+        case 'yellow': return 'Almost';
+        case 'red': return 'Below goal';
+        default: return 'No data';
+      }
+    case 'workout':
+      switch (state) {
+        case 'green': return 'Done';
+        case 'yellow': return 'Partial';
+        case 'red': return 'Missed';
+        default: return 'Rest day';
+      }
+  }
+}
+
+export function calculateAdaptiveAdjustment(
+  currentWeightKg: number | null,
+  targetWeightKg: number | null,
+  maintenanceCalories: number | null,
+): number {
+  if (!currentWeightKg || !targetWeightKg || !maintenanceCalories) return 0;
+  const deltaW = targetWeightKg - currentWeightKg;
+  if (deltaW > 0) return Math.round(Math.min(maintenanceCalories * 0.15, 500));
+  if (deltaW < 0) return Math.round(-Math.min(maintenanceCalories * 0.20, 500));
+  return 0;
+}
+
+export function checkTargetWeightBmi(
+  currentWeightKg: number | null,
+  targetWeightKg: number | null,
+  heightCm: number | null,
+): boolean {
+  if (!currentWeightKg || !targetWeightKg || !heightCm || heightCm <= 0) return false;
+  const deltaWeight = targetWeightKg - currentWeightKg;
+  if (deltaWeight === 0) return false;
+  const heightM = heightCm / 100;
+  const bmiTarget = targetWeightKg / (heightM * heightM);
+  const isUnhealthyGain = deltaWeight > 0 && bmiTarget > 24.9;
+  const isUnhealthyLoss = deltaWeight < 0 && bmiTarget < 18.5;
+  return isUnhealthyGain || isUnhealthyLoss;
+}
+
 export function calculateBmi(weightKg?: number | null, heightCm?: number | null) {
   if (!weightKg || !heightCm) return null;
   const heightM = heightCm / 100;

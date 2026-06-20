@@ -75,6 +75,19 @@ button {
   cursor: pointer;
 }
 
+.pb-safe-nav {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+@keyframes barcode-scan {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(6.5rem); }
+}
+
+.barcode-scan-line {
+  animation: barcode-scan 1.8s ease-in-out infinite;
+}
+
 @layer components {
   .panel {
     @apply rounded-lg border border-black/10 bg-white/90 shadow-soft backdrop-blur dark:border-white/10 dark:bg-white/[0.065];

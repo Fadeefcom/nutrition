@@ -103,13 +103,9 @@ export default function Workouts() {
   }, [progress]);
 
   const exerciseOptions = useMemo(() => {
-    if (!settings || !workout) return [];
-    return uniqueNames([
-      ...settings.defaultExercises,
-      ...settings.exerciseTargets.map((target) => target.exerciseName),
-      ...workout.exercises.map((exercise) => exercise.exerciseName),
-    ]);
-  }, [settings, workout]);
+    if (!settings) return [];
+    return uniqueNames(settings.exerciseTargets.map((target) => target.exerciseName));
+  }, [settings]);
 
   if (loading) {
     return <Skeleton className="h-[70vh]" />;
@@ -442,29 +438,6 @@ function ExerciseCombobox({
       placeholder={placeholder}
       searchable
       searchPlaceholder="Search exercises"
-      footer={({ searchQuery, close }) => {
-        const createName = searchQuery.trim();
-        const hasExactMatch = options.some((option) => option.toLowerCase() === createName.toLowerCase());
-        const canCreateNamed = Boolean(createName && !hasExactMatch);
-        return (
-            <button
-              className="btn btn-ghost h-9 w-full justify-start"
-              disabled={Boolean(createName && hasExactMatch)}
-              onClick={() => {
-                onChange(canCreateNamed ? createName : 'New Exercise');
-                close();
-              }}
-              type="button"
-            >
-              <Plus size={15} />
-              {canCreateNamed
-                ? `Create "${createName}"`
-                : createName && hasExactMatch
-                  ? 'Exercise already exists'
-                  : 'Create new exercise'}
-            </button>
-        );
-      }}
     />
   );
 }

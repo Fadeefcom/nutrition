@@ -13,9 +13,11 @@ import type {
   Settings as SettingsModel,
 } from '../types/models';
 import {
+  calculateAdaptiveAdjustment,
   calculateBmi,
   calculateFiberTargetGrams,
   calculateMaintenanceCalories,
+  checkTargetWeightBmi,
   macroTargets,
 } from '../utils/calculations';
 import { formatShortDate, toIsoDate } from '../utils/date';
@@ -38,9 +40,12 @@ export default function Settings() {
   const [mobileEditingTargetId, setMobileEditingTargetId] = useState<string | null>(null);
   const [openRuleTargetId, setOpenRuleTargetId] = useState<string | null>(null);
 
+  const [bmiWarning, setBmiWarning] = useState(false);
+
   const profileSnapshotRef = useRef('');
   const settingsSnapshotRef = useRef('');
   const weightSnapshotRef = useRef('');
+  const targetWeightDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -75,6 +80,14 @@ export default function Settings() {
         profileSnapshotRef.current = JSON.stringify(nextProfile);
         settingsSnapshotRef.current = JSON.stringify(nextSettings);
         weightSnapshotRef.current = nextMetric.weightKg ? String(nextMetric.weightKg) : '';
+
+        setBmiWarning(
+          checkTargetWeightBmi(
+            nextMetric.weightKg ?? null,
+            nextProfile.targetWeightKg ?? null,
+            nextProfile.heightCm ?? null,
+          ),
+        );
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unable to load settings.');
       } finally {
@@ -346,19 +359,22 @@ export default function Settings() {
           </label>
           <label className="w-full max-w-48 text-sm font-bold">
             <span className="mb-1 block text-zinc-500 dark:text-zinc-400">Target weight kg</span>
-            <input
-              className="field no-spinner w-full"
-              type="number"
-              min="1"
-              step="0.1"
-              value={profile.targetWeightKg ?? ''}
-              onChange={(event) =>
-                setProfile({
-                  ...profile,
-                  targetWeightKg: event.target.value === '' ? null : Number(event.target.value),
-                })
-              }
-            />
+            <div className="group relative">
+              <input
+                className={`field no-spinner w-full ${bmiWarning ? 'border-[#FF4D4F] ring-2 ring-[#FF4D4F]/30 focus:border-[#FF4D4F] focus:ring-[#FF4D4F]/30' : ''}`}
+                type="number"
+                min="1"
+                step="0.1"
+                value={profile.targetWeightKg ?? ''}
+                onChange={(event) => handleTargetWeightChange(event.target.value)}
+                onBlur={(event) => handleTargetWeightChange(event.target.value)}
+              />
+              {bmiWarning ? (
+                <div className="pointer-events-none absolute bottom-full left-0 z-50 mb-2 hidden w-64 rounded-lg border border-[#FF4D4F]/25 bg-white px-3 py-2 text-xs font-semibold text-[#FF4D4F] shadow-lg group-hover:block dark:bg-zinc-900">
+                  Target weight falls outside the healthy BMI range (18.5 – 24.9) for your height.
+                </div>
+              ) : null}
+            </div>
           </label>
           <InlineMetric label="BMI" value={bmi ? String(bmi) : 'Need data'} />
           <InlineMetric
@@ -694,6 +710,38 @@ export default function Settings() {
     );
   }
 
+  function handleTargetWeightChange(rawValue: string) {
+    const parsed = rawValue === '' ? null : Number(rawValue);
+    const validTarget = Number.isFinite(parsed) && (parsed ?? 0) > 0 ? parsed : null;
+
+    setProfile((current) => (current ? { ...current, targetWeightKg: validTarget } : current));
+
+    if (targetWeightDebounceRef.current !== null) {
+      clearTimeout(targetWeightDebounceRef.current);
+    }
+
+    const snapCurrentWeight = currentWeight;
+    const snapMaintenance = maintenanceCalories;
+    const snapHeightCm = profile?.heightCm ?? null;
+
+    targetWeightDebounceRef.current = window.setTimeout(() => {
+      setBmiWarning(checkTargetWeightBmi(snapCurrentWeight, validTarget, snapHeightCm));
+
+      if (validTarget !== null && snapMaintenance && snapCurrentWeight) {
+        const adjustment = calculateAdaptiveAdjustment(snapCurrentWeight, validTarget, snapMaintenance);
+        setCalorieAdjustmentInput(String(adjustment));
+        setSettings((current) =>
+          current
+            ? {
+                ...current,
+                nutritionTarget: buildEnergyTarget(current.nutritionTarget, snapMaintenance, adjustment),
+              }
+            : current,
+        );
+      }
+    }, 300);
+  }
+
   function updateCalorieAdjustment(rawValue: string) {
     setCalorieAdjustmentInput(rawValue);
 
@@ -894,7 +942,7 @@ function CalorieAdjustmentField({
         </span>
       </div>
       <span className="mt-1 block text-xs font-normal text-zinc-500 dark:text-zinc-400">
-        +300 kcal for lean mass gain.
+        Auto-computed from target weight. Override manually if needed.
       </span>
     </label>
   );

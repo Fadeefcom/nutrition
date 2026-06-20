@@ -33,6 +33,7 @@ import {
   normalizeNutrition,
   normalizeWorkout,
   round,
+  statusLabel,
 } from '../utils/calculations';
 import { addDays, formatShortDate, toIsoDate } from '../utils/date';
 import { withForecast } from '../utils/forecast';
@@ -241,7 +242,7 @@ export default function Dashboard() {
               <h2 className="text-sm font-black uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                 Exercise targets
               </h2>
-              <StatusPill state={data.todayStatus.workout.state} label={data.todayStatus.workout.state} />
+              <StatusPill state={data.todayStatus.workout.state} label={statusLabel(data.todayStatus.workout.state, 'workout')} />
             </div>
             <div className="divide-y divide-black/10 dark:divide-white/10">
               {data.todayStatus.exerciseTargets.map((target) => (
@@ -448,19 +449,19 @@ export default function Dashboard() {
             />
             <SidebarRow
               label="Yesterday"
-              value={<StatusPill state={data.yesterdayStatus.fullDay.state} label={data.yesterdayStatus.fullDay.state} />}
+              value={<StatusPill state={data.yesterdayStatus.fullDay.state} label={statusLabel(data.yesterdayStatus.fullDay.state, 'fullDay')} />}
             />
             <SidebarRow
               label="Calories"
-              value={<StatusPill state={data.yesterdayStatus.calories.state} label={data.yesterdayStatus.calories.state} />}
+              value={<StatusPill state={data.yesterdayStatus.calories.state} label={statusLabel(data.yesterdayStatus.calories.state, 'calories')} />}
             />
             <SidebarRow
               label="Protein"
-              value={<StatusPill state={data.yesterdayStatus.protein.state} label={data.yesterdayStatus.protein.state} />}
+              value={<StatusPill state={data.yesterdayStatus.protein.state} label={statusLabel(data.yesterdayStatus.protein.state, 'protein')} />}
             />
             <SidebarRow
               label="Workout"
-              value={<StatusPill state={data.yesterdayStatus.workout.state} label={data.yesterdayStatus.workout.state} />}
+              value={<StatusPill state={data.yesterdayStatus.workout.state} label={statusLabel(data.yesterdayStatus.workout.state, 'workout')} />}
             />
           </div>
         </aside>
