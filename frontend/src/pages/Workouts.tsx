@@ -3,11 +3,10 @@ import {
   Hash,
   ListChecks,
   Plus,
-  Save,
   Trash2,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api/client';
 import { BaseDropdown, type DropdownOption } from '../components/BaseDropdown';
 import { EmptyState } from '../components/EmptyState';
@@ -33,6 +32,7 @@ export default function Workouts() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const savedWorkoutSnapshotRef = useRef('');
 
   useEffect(() => {
     const load = async () => {
@@ -40,8 +40,10 @@ export default function Workouts() {
       setError('');
       try {
         const [nextSettings, nextWorkout] = await Promise.all([api.settings(), api.workout(date)]);
+        const normalizedWorkout = normalizeWorkout(nextWorkout);
         setSettings(nextSettings);
-        setWorkout(normalizeWorkout(nextWorkout));
+        setWorkout(normalizedWorkout);
+        savedWorkoutSnapshotRef.current = JSON.stringify(normalizedWorkout);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unable to load workout.');
       } finally {
@@ -52,6 +54,38 @@ export default function Workouts() {
   }, [date]);
 
   const normalized = useMemo(() => (workout ? normalizeWorkout(workout) : null), [workout]);
+
+  useEffect(() => {
+    if (!workout || loading) return;
+
+    const normalizedWorkout = normalizeWorkout(workout);
+    const snapshot = JSON.stringify(normalizedWorkout);
+    if (snapshot === savedWorkoutSnapshotRef.current) {
+      setSaving(false);
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const saved = await api.saveWorkout(date, normalizedWorkout);
+        const normalizedSaved = normalizeWorkout(saved);
+        savedWorkoutSnapshotRef.current = JSON.stringify(normalizedSaved);
+        setWorkout((current) => {
+          if (!current) return normalizedSaved;
+          return JSON.stringify(normalizeWorkout(current)) === snapshot ? normalizedSaved : current;
+        });
+        setSaving(false);
+      } catch (err) {
+        setSaving(false);
+        setError(err instanceof Error ? err.message : 'Unable to auto-save workout.');
+      }
+    }, 600);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [date, loading, workout]);
 
   const progress = useMemo(() => {
     if (!settings || !workout) return [];
@@ -77,20 +111,6 @@ export default function Workouts() {
     ]);
   }, [settings, workout]);
 
-  const save = async () => {
-    if (!workout) return;
-    setSaving(true);
-    setError('');
-    try {
-      const saved = await api.saveWorkout(date, normalizeWorkout(workout));
-      setWorkout(normalizeWorkout(saved));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to save workout.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   if (loading) {
     return <Skeleton className="h-[70vh]" />;
   }
@@ -110,10 +130,9 @@ export default function Workouts() {
             onChange={(event) => setWorkout({ ...workout, title: event.target.value })}
             placeholder="Workout title"
           />
-          <button className="btn btn-primary" disabled={saving} onClick={save}>
-            <Save size={17} />
-            {saving ? 'Saving' : 'Save'}
-          </button>
+          <p className="flex min-h-10 items-center justify-end text-sm font-bold text-zinc-500 dark:text-zinc-400">
+            {saving ? 'Saving...' : 'Auto-save enabled'}
+          </p>
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">

@@ -1,11 +1,16 @@
 import {
   Barcode,
   Camera,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   Plus,
   Save,
   Trash2,
   X,
 } from 'lucide-react';
+import { motion } from 'framer-motion';
+import type { FormEvent } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api/client';
 import { BaseDropdown, type DropdownOption } from '../components/BaseDropdown';
@@ -14,7 +19,7 @@ import { ProgressRing } from '../components/ProgressRing';
 import { Skeleton } from '../components/Skeleton';
 import type { DailyNutrition, Product, Settings } from '../types/models';
 import { entryFromProduct, macroTargets, normalizeNutrition, round } from '../utils/calculations';
-import { toIsoDate } from '../utils/date';
+import { addDays, formatShortDate, toIsoDate } from '../utils/date';
 
 const now = () => new Date().toISOString();
 const mealOptions: Array<DropdownOption<string>> = [
@@ -23,6 +28,7 @@ const mealOptions: Array<DropdownOption<string>> = [
   { value: 'dinner', label: 'Dinner' },
   { value: 'snack', label: 'Snack' },
 ];
+const baseServingOptionId = 'base';
 
 function blankProduct(seed = ''): Product {
   const trimmed = seed.trim();
@@ -55,20 +61,28 @@ export default function Nutrition() {
   const [day, setDay] = useState<DailyNutrition | null>(null);
   const [mealType, setMealType] = useState('breakfast');
   const [productId, setProductId] = useState('');
+  const [servingOptionId, setServingOptionId] = useState(baseServingOptionId);
   const [productQuery, setProductQuery] = useState('');
   const [productForm, setProductForm] = useState<Product>(() => blankProduct());
   const [productFormOpen, setProductFormOpen] = useState(false);
-  const [grams, setGrams] = useState(100);
+  const [amountInput, setAmountInput] = useState('100');
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [transitioningDate, setTransitioningDate] = useState(false);
+  const [nutritionSaving, setNutritionSaving] = useState(false);
   const [productSaving, setProductSaving] = useState(false);
   const [barcodeLoading, setBarcodeLoading] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const dateInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
+    let active = true;
     const load = async () => {
-      setLoading(true);
+      if (day) {
+        setTransitioningDate(true);
+      } else {
+        setLoading(true);
+      }
       setError('');
       try {
         const [nextSettings, nextProducts, nextDay] = await Promise.all([
@@ -76,19 +90,30 @@ export default function Nutrition() {
           api.products(),
           api.nutrition(date),
         ]);
+        if (!active) return;
+
         setSettings(nextSettings);
         setProducts(nextProducts);
         setProductId('');
+        setServingOptionId(baseServingOptionId);
+        setAmountInput('100');
         setProductQuery('');
         setProductFormOpen(false);
         setDay(normalizeNutrition(nextDay));
       } catch (err) {
+        if (!active) return;
         setError(err instanceof Error ? err.message : 'Unable to load nutrition.');
       } finally {
+        if (!active) return;
         setLoading(false);
+        setTransitioningDate(false);
       }
     };
     void load();
+
+    return () => {
+      active = false;
+    };
   }, [date]);
 
   const targets = useMemo(() => (settings ? macroTargets(settings.nutritionTarget) : null), [settings]);
@@ -96,31 +121,29 @@ export default function Nutrition() {
     () => products.find((product) => product.id === productId) ?? null,
     [productId, products],
   );
+  const selectedServing = useMemo(
+    () =>
+      selectedProduct?.customServings?.find((serving) => serving.id === servingOptionId) ?? null,
+    [selectedProduct, servingOptionId],
+  );
+  const selectedServingUnit = selectedProduct
+    ? selectedServing?.unit ?? getProductServing(selectedProduct).unit
+    : 'g';
+  const amount = parsePositiveAmount(amountInput);
   const productOptions = useMemo<Array<DropdownOption<string>>>(
     () =>
-      products.map((product) => ({
-        value: product.id,
-        label: productLabel(product),
-        description: [product.barcode, `${product.caloriesPer100g} kcal / 100g`]
-          .filter(Boolean)
-          .join(' | '),
-      })),
+      products.map((product) => {
+        const serving = getProductServing(product);
+        return {
+          value: product.id,
+          label: productLabel(product),
+          description: `${formatServingValue(serving.amount, serving.unit)} | ${formatAmount(
+            caloriesForAmount(product, serving.amount),
+          )} kcal`,
+        };
+      }),
     [products],
   );
-
-  const save = async () => {
-    if (!day) return;
-    setSaving(true);
-    setError('');
-    try {
-      const saved = await api.saveNutrition(date, normalizeNutrition(day));
-      setDay(normalizeNutrition(saved));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to save nutrition.');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   if (loading) {
     return <Skeleton className="h-[70vh]" />;
@@ -131,26 +154,57 @@ export default function Nutrition() {
   }
 
   const normalized = normalizeNutrition(day);
+  const isToday = date === toIsoDate();
 
   return (
     <div className="space-y-5">
-      <section className="panel p-4">
-        <div className="grid gap-3 md:grid-cols-[10rem_1fr_auto]">
-          <input className="field" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+      <section className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <button
+            className="btn btn-ghost h-10 w-10 px-0"
+            onClick={() => setDate((current) => addDays(current, -1))}
+            type="button"
+            title="Previous day"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <button
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg px-2 text-xl font-black text-zinc-950 transition hover:bg-black/5 dark:text-white dark:hover:bg-white/10"
+            onClick={() => dateInputRef.current?.showPicker?.() ?? dateInputRef.current?.click()}
+            type="button"
+          >
+            <CalendarDays size={18} className="text-zinc-500 dark:text-zinc-400" />
+            {isToday ? `Today, ${formatShortDate(date)}` : formatShortDate(date)}
+          </button>
           <input
-            className="field"
-            value={day.notes}
-            onChange={(event) => setDay({ ...day, notes: event.target.value })}
-            placeholder="Daily notes"
+            ref={dateInputRef}
+            className="sr-only"
+            type="date"
+            value={date}
+            onChange={(event) => setDate(event.target.value)}
           />
-          <button className="btn btn-primary" disabled={saving} onClick={save}>
-            <Save size={17} />
-            {saving ? 'Saving' : 'Save'}
+          <button
+            className="btn btn-ghost h-10 w-10 px-0"
+            onClick={() => setDate((current) => addDays(current, 1))}
+            type="button"
+            title="Next day"
+          >
+            <ChevronRight size={18} />
           </button>
         </div>
-        {error ? <p className="mt-3 text-sm font-semibold text-ember">{error}</p> : null}
+        {nutritionSaving ? (
+          <p className="text-sm font-bold text-lagoon">Saving...</p>
+        ) : null}
+        {error ? <p className="text-sm font-semibold text-ember">{error}</p> : null}
       </section>
 
+      <motion.div
+        key={day.date}
+        className="space-y-5"
+        initial={{ opacity: 0.92, y: 6 }}
+        animate={{ opacity: transitioningDate ? 0.58 : 1, y: 0 }}
+        transition={{ duration: 0.16, ease: 'easeOut' }}
+      >
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <div className="panel p-4">
           <ProgressRing
@@ -210,8 +264,12 @@ export default function Nutrition() {
               value={productId}
               onChange={(nextProductId) => {
                 const product = products.find((item) => item.id === nextProductId);
-                setProductId(nextProductId);
-                setProductQuery(product ? productLabel(product) : '');
+                if (!product) return;
+
+                setProductId(product.id);
+                setServingOptionId(baseServingOptionId);
+                setAmountInput(formatAmount(getProductServing(product).amount));
+                setProductQuery(productLabel(product));
                 setProductFormOpen(false);
               }}
               placeholder="Search product, type barcode, or create new"
@@ -273,19 +331,24 @@ export default function Nutrition() {
             }}
           />
 
-          <label className="relative">
-            <span className="sr-only">Grams</span>
-            <input
-              className="field w-full pr-9 text-right"
-              type="number"
-              min="1"
-              value={grams}
-              onChange={(event) => setGrams(Number(event.target.value))}
-              placeholder="100"
-            />
-          </label>
+          <QuantityControlGroup
+            product={selectedProduct}
+            servingOptionId={servingOptionId}
+            amountInput={amountInput}
+            onAmountInputChange={setAmountInput}
+            onServingOptionChange={(nextServingOptionId) => {
+              if (!selectedProduct) return;
+              const nextServing = getServingSelection(selectedProduct, nextServingOptionId);
+              setServingOptionId(nextServingOptionId);
+              setAmountInput(formatAmount(nextServingOptionId === baseServingOptionId ? nextServing.amount : 1));
+            }}
+          />
 
-          <button className="btn btn-primary" onClick={addEntry} disabled={!selectedProduct}>
+          <button
+            className="btn btn-primary"
+            onClick={addEntry}
+            disabled={!selectedProduct || !amount || nutritionSaving}
+          >
             <Plus size={17} />
             Add
           </button>
@@ -316,13 +379,20 @@ export default function Nutrition() {
               >
                 <div>
                   <p className="font-bold">{entry.productName}</p>
-                  <p className="text-xs uppercase text-zinc-500 dark:text-zinc-400">{entry.mealType}</p>
+                  <p className="text-xs uppercase text-zinc-500 dark:text-zinc-400">
+                    {[entry.mealType, entry.servingLabel].filter(Boolean).join(' · ')}
+                  </p>
                 </div>
-                <Metric label="g" value={entry.grams} />
+                <Metric label={entry.amountUnit || 'g'} value={entry.displayAmount ?? entry.grams} />
                 <Metric label="kcal" value={entry.calories} />
                 <Metric label="P" value={entry.protein} />
                 <Metric label="C/F" value={`${entry.carbs}/${entry.fat}`} />
-                <button className="btn btn-ghost h-11 w-11 px-0" onClick={() => removeEntry(entry.id)} title="Delete entry">
+                <button
+                  className="btn btn-ghost h-11 w-11 px-0"
+                  disabled={nutritionSaving}
+                  onClick={() => removeEntry(entry.id)}
+                  title="Delete entry"
+                >
                   <Trash2 size={16} />
                 </button>
               </div>
@@ -330,26 +400,63 @@ export default function Nutrition() {
           </div>
         )}
       </section>
+      </motion.div>
     </div>
   );
 
-  function addEntry() {
-    if (!selectedProduct || !day) return;
-    setDay((current) =>
-      current
-        ? { ...current, entries: [...current.entries, entryFromProduct(selectedProduct, grams, mealType)] }
-        : current,
-    );
+  async function addEntry() {
+    const parsedAmount = parsePositiveAmount(amountInput);
+    if (!selectedProduct || !day || !parsedAmount) return;
+    const serving = getServingSelection(selectedProduct, servingOptionId);
+    const canonicalAmount =
+      servingOptionId === baseServingOptionId ? parsedAmount : parsedAmount * serving.amount;
+    const selectedServingName = selectedServing?.name ?? null;
+    const nextDay = normalizeNutrition({
+      ...day,
+      entries: [
+        ...day.entries,
+        entryFromProduct(
+          selectedProduct,
+          canonicalAmount,
+          mealType,
+          parsedAmount,
+          selectedServingName ?? normalizeServingUnit(selectedServingUnit),
+          selectedServingName,
+        ),
+      ],
+    });
+
+    await saveNutritionMutation(nextDay, day);
   }
 
-  function removeEntry(id: string) {
-    setDay((current) =>
-      current ? { ...current, entries: current.entries.filter((entry) => entry.id !== id) } : current,
-    );
+  async function removeEntry(id: string) {
+    if (!day) return;
+    const nextDay = normalizeNutrition({
+      ...day,
+      entries: day.entries.filter((entry) => entry.id !== id),
+    });
+
+    await saveNutritionMutation(nextDay, day);
+  }
+
+  async function saveNutritionMutation(nextDay: DailyNutrition, previousDay: DailyNutrition) {
+    setDay(nextDay);
+    setNutritionSaving(true);
+    setError('');
+    try {
+      const saved = await api.saveNutrition(date, nextDay);
+      setDay(normalizeNutrition(saved));
+    } catch (err) {
+      setDay(previousDay);
+      setError(err instanceof Error ? err.message : 'Unable to save nutrition.');
+    } finally {
+      setNutritionSaving(false);
+    }
   }
 
   function openProductDraft(seed: string, patch: Partial<Product> = {}) {
     setProductId('');
+    setServingOptionId(baseServingOptionId);
     setProductForm({
       ...blankProduct(seed),
       ...patch,
@@ -384,6 +491,7 @@ export default function Nutrition() {
         updatedAt: imported.updatedAt ?? now(),
       });
       setProductId('');
+      setServingOptionId(baseServingOptionId);
       setProductQuery(imported.barcode || barcode);
       setProductFormOpen(true);
     } catch (err) {
@@ -411,8 +519,7 @@ export default function Nutrition() {
       name: productForm.name.trim(),
       brand: productForm.brand.trim(),
       barcode: productForm.barcode.trim(),
-      servingSizeGrams:
-        serving.unit === null || serving.unit === 'g' ? serving.amount : productForm.servingSizeGrams,
+      servingSizeGrams: serving.amount,
       servingSizeAmount: serving.amount,
       servingSizeUnit: serving.unit,
       customServings: productForm.customServings ?? [],
@@ -433,6 +540,8 @@ export default function Nutrition() {
         exists ? items.map((item) => (item.id === saved.id ? saved : item)) : [...items, saved],
       );
       setProductId(saved.id);
+      setServingOptionId(baseServingOptionId);
+      setAmountInput(formatAmount(getProductServing(saved).amount));
       setProductQuery(productLabel(saved));
       setProductForm(saved);
       setProductFormOpen(false);
@@ -459,19 +568,27 @@ function ProductEditor({
   onClose: () => void;
   onSave: () => void;
 }) {
+  const submitProduct = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    onSave();
+  };
+
   return (
-    <div className="mt-4 rounded-lg border border-black/10 bg-black/5 p-3 dark:border-white/10 dark:bg-white/10">
+    <form
+      className="mt-4 rounded-lg border border-black/10 bg-black/5 p-3 dark:border-white/10 dark:bg-white/10"
+      onSubmit={submitProduct}
+    >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-lg font-black">{exists ? 'Review product' : 'Create product'}</h3>
           <p className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">{product.source}</p>
         </div>
         <div className="flex gap-2">
-          <button className="btn btn-primary h-9" disabled={saving} onClick={onSave}>
+          <button className="btn btn-primary h-9" disabled={saving} type="submit">
             <Save size={15} />
             {saving ? 'Saving' : 'Save product'}
           </button>
-          <button className="btn btn-ghost h-9 w-9 px-0" onClick={onClose} title="Close">
+          <button className="btn btn-ghost h-9 w-9 px-0" onClick={onClose} title="Close" type="button">
             <X size={15} />
           </button>
         </div>
@@ -511,7 +628,7 @@ function ProductEditor({
           onChange={(fiberPer100g) => onChange({ ...product, fiberPer100g })}
         />
       </div>
-    </div>
+    </form>
   );
 }
 
@@ -545,14 +662,14 @@ function AdaptiveServingField({
     setDraft(formatServingValue(parsed.amount, parsed.unit));
     onChange({
       ...product,
-      servingSizeGrams: parsed.unit === null || parsed.unit === 'g' ? parsed.amount : product.servingSizeGrams,
+      servingSizeGrams: parsed.amount,
       servingSizeAmount: parsed.amount,
       servingSizeUnit: parsed.unit,
     });
   };
 
   const saveCustomServing = () => {
-    const parsedAmount = parseAmountValue(customAmount);
+    const parsedAmount = parsePositiveAmount(customAmount);
     if (!customName.trim() || parsedAmount === null) {
       return;
     }
@@ -574,7 +691,7 @@ function AdaptiveServingField({
     setCustomOpen(false);
   };
 
-  const customPreviewAmount = parseAmountValue(customAmount);
+  const customPreviewAmount = parsePositiveAmount(customAmount);
   const customPreviewValue =
     customPreviewAmount === null ? customAmount.trim() || '0' : formatAmount(customPreviewAmount);
   const normalizedCustomName = customName.trim() || 'Serving';
@@ -587,8 +704,18 @@ function AdaptiveServingField({
           className={`field w-full ${error ? 'border-ember focus:border-ember focus:ring-ember/30' : ''}`}
           value={draft}
           onChange={(event) => {
-            setDraft(event.target.value);
+            const nextDraft = event.target.value;
+            const parsed = parseServingValue(nextDraft);
+            setDraft(nextDraft);
             setError('');
+            if (parsed) {
+              onChange({
+                ...product,
+                servingSizeGrams: parsed.amount,
+                servingSizeAmount: parsed.amount,
+                servingSizeUnit: parsed.unit,
+              });
+            }
           }}
           onBlur={commitServing}
           onKeyDown={(event) => {
@@ -676,6 +803,82 @@ function AdaptiveServingField({
   );
 }
 
+function QuantityControlGroup({
+  product,
+  servingOptionId,
+  amountInput,
+  onAmountInputChange,
+  onServingOptionChange,
+}: {
+  product: Product | null;
+  servingOptionId: string;
+  amountInput: string;
+  onAmountInputChange: (value: string) => void;
+  onServingOptionChange: (servingOptionId: string) => void;
+}) {
+  const servingOptions = useMemo<Array<DropdownOption<string>>>(() => {
+    if (!product) return [];
+
+    const baseServing = getProductServing(product);
+    const baseUnit = normalizeServingUnit(baseServing.unit) ?? 'unit';
+    return [
+      {
+        value: baseServingOptionId,
+        label: baseUnit,
+        description: `Base Unit · ${formatServingValue(baseServing.amount, baseServing.unit)}`,
+      },
+      ...(product.customServings ?? []).map((serving) => ({
+        value: serving.id,
+        label: serving.name,
+        description: `1 ${serving.name} = ${formatServingValue(serving.amount, serving.unit)}`,
+      })),
+    ];
+  }, [product]);
+
+  return (
+    <div className="flex min-w-0">
+      <label className="min-w-0 flex-1">
+        <span className="sr-only">Amount</span>
+        <input
+          className="field no-spinner h-10 min-h-10 w-full rounded-r-none border-r-0 text-right"
+          type="number"
+          min="0.001"
+          step="any"
+          value={amountInput}
+          disabled={!product}
+          onChange={(event) => {
+            if (isPositiveAmountDraft(event.target.value)) {
+              onAmountInputChange(event.target.value);
+            }
+          }}
+          onBlur={() => {
+            const parsedAmount = parsePositiveAmount(amountInput);
+            onAmountInputChange(parsedAmount ? formatAmount(parsedAmount) : '1');
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              const parsedAmount = parsePositiveAmount(amountInput);
+              onAmountInputChange(parsedAmount ? formatAmount(parsedAmount) : '1');
+            }
+          }}
+          placeholder="100"
+        />
+      </label>
+      <BaseDropdown
+        className="w-24 shrink-0"
+        triggerClassName="h-10 min-h-10 rounded-l-none border-l-0 bg-[#262626] px-2 text-xs hover:bg-[#303030]"
+        menuClassName="min-w-36"
+        options={servingOptions}
+        value={product ? servingOptionId : ''}
+        onChange={(nextServingOptionId) => onServingOptionChange(nextServingOptionId)}
+        placeholder="unit"
+        disabled={!product}
+      />
+    </div>
+  );
+}
+
 function TextField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <label className="text-sm font-bold">
@@ -715,28 +918,53 @@ type ParsedServing = {
 };
 
 function getProductServing(product: Product): ParsedServing {
-  const hasAdaptiveServing = product.servingSizeAmount !== undefined && product.servingSizeAmount !== null;
-  const amount = hasAdaptiveServing && Number.isFinite(product.servingSizeAmount)
-    ? Number(product.servingSizeAmount)
+  const hasAdaptiveServing =
+    typeof product.servingSizeAmount === 'number' && Number.isFinite(product.servingSizeAmount);
+  const unit = normalizeServingUnit(product.servingSizeUnit);
+  const amount = hasAdaptiveServing
+    ? product.servingSizeAmount
     : product.servingSizeGrams;
 
   return {
     amount,
-    unit: hasAdaptiveServing ? normalizeServingUnit(product.servingSizeUnit) : 'g',
+    unit: unit ?? 'g',
   };
+}
+
+function getServingSelection(product: Product, servingOptionId: string): ParsedServing {
+  if (servingOptionId !== baseServingOptionId) {
+    const customServing = product.customServings?.find((serving) => serving.id === servingOptionId);
+    if (customServing) {
+      return {
+        amount: customServing.amount,
+        unit: normalizeServingUnit(customServing.unit),
+      };
+    }
+  }
+
+  return getProductServing(product);
 }
 
 function parseServingValue(value: string): ParsedServing | null {
   const match = value.trim().match(/^([+-]?(?:\d+(?:[.,]\d+)?|[.,]\d+))\s*([^\d\s].*)?$/);
   if (!match) return null;
 
-  const amount = parseAmountValue(match[1]);
+  const amount = parsePositiveAmount(match[1]);
   if (amount === null) return null;
 
   return {
     amount,
     unit: normalizeServingUnit(match[2] ?? null),
   };
+}
+
+function isPositiveAmountDraft(value: string) {
+  return /^(?:\d+(?:[.,]\d*)?|[.,]\d*)?$/.test(value.trim());
+}
+
+function parsePositiveAmount(value: string) {
+  const amount = parseAmountValue(value);
+  return amount !== null && amount > 0 ? amount : null;
 }
 
 function parseAmountValue(value: string) {
@@ -764,6 +992,11 @@ function formatUnitSuffix(unit?: string | null) {
 function formatAmount(value: number) {
   if (!Number.isFinite(value)) return '0';
   return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(3))).replace(/\.?0+$/, '');
+}
+
+function caloriesForAmount(product: Product, amount: number) {
+  const serving = getProductServing(product);
+  return serving.amount > 0 ? round(product.caloriesPer100g * (amount / serving.amount)) : 0;
 }
 
 function Metric({ label, value }: { label: string; value: number | string }) {

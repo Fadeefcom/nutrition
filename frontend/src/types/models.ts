@@ -8,6 +8,7 @@ export interface Profile {
   age?: number | null;
   sex?: 'male' | 'female' | string;
   activityMultiplier?: number | null;
+  targetWeightKg?: number | null;
   timeZone: string;
   notes: string;
 }
@@ -83,6 +84,9 @@ export interface NutritionEntry {
   productId: string;
   productName: string;
   grams: number;
+  displayAmount?: number | null;
+  amountUnit?: string | null;
+  servingLabel?: string | null;
   calories: number;
   protein: number;
   carbs: number;

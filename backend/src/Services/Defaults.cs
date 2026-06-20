@@ -10,6 +10,7 @@ public static class Defaults
         Age = 30,
         Sex = "male",
         ActivityMultiplier = 1.55m,
+        TargetWeightKg = null,
         TimeZone = "Europe/Lisbon",
         Notes = "Personal fitness diary"
     };

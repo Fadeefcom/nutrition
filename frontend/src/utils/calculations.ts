@@ -43,14 +43,24 @@ export function entryFromProduct(
   product: Product,
   grams: number,
   mealType: NutritionEntry['mealType'],
+  displayAmount?: number | null,
+  amountUnit?: string | null,
+  servingLabel?: string | null,
 ): NutritionEntry {
-  const multiplier = grams / 100;
+  const baseAmount =
+    typeof product.servingSizeAmount === 'number' && Number.isFinite(product.servingSizeAmount)
+      ? product.servingSizeAmount
+      : 100;
+  const multiplier = baseAmount > 0 ? grams / baseAmount : 0;
   return {
     id: crypto.randomUUID(),
     mealType,
     productId: product.id,
     productName: [product.brand, product.name].filter(Boolean).join(' '),
     grams,
+    displayAmount,
+    amountUnit,
+    servingLabel,
     calories: round(product.caloriesPer100g * multiplier),
     protein: round(product.proteinPer100g * multiplier),
     carbs: round(product.carbsPer100g * multiplier),

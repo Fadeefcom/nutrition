@@ -7,6 +7,7 @@ public sealed record Profile
     public int? Age { get; init; } = 30;
     public string Sex { get; init; } = "male";
     public decimal ActivityMultiplier { get; init; } = 1.55m;
+    public decimal? TargetWeightKg { get; init; }
     public string TimeZone { get; init; } = "Europe/Lisbon";
     public string Notes { get; init; } = "";
 }
@@ -89,6 +90,9 @@ public sealed record NutritionEntry
     public string ProductId { get; init; } = "";
     public string ProductName { get; init; } = "";
     public decimal Grams { get; init; }
+    public decimal? DisplayAmount { get; init; }
+    public string? AmountUnit { get; init; }
+    public string? ServingLabel { get; init; }
     public decimal Calories { get; init; }
     public decimal Protein { get; init; }
     public decimal Carbs { get; init; }

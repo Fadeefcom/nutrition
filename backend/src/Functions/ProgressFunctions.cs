@@ -16,7 +16,7 @@ public sealed class ProgressFunctions(IJsonRepository repository, JsonSerializer
         CancellationToken cancellationToken)
     {
         var days = int.TryParse(QueryHelpers.Get(request.Url, "days"), out var parsedDays)
-            ? Math.Clamp(parsedDays, 7, 365)
+            ? Math.Clamp(parsedDays, 7, 3650)
             : 84;
         var settings = await repository.GetOrCreateAsync(BlobNames.Settings, Defaults.Settings, cancellationToken);
         var to = QueryHelpers.Get(request.Url, "to");
@@ -86,7 +86,7 @@ public sealed class ProgressFunctions(IJsonRepository repository, JsonSerializer
         CancellationToken cancellationToken)
     {
         var days = int.TryParse(QueryHelpers.Get(request.Url, "days"), out var parsedDays)
-            ? Math.Clamp(parsedDays, 7, 365)
+            ? Math.Clamp(parsedDays, 7, 3650)
             : 180;
         var to = QueryHelpers.Get(request.Url, "to");
         var end = string.IsNullOrWhiteSpace(to)

@@ -48,6 +48,19 @@ interface DashboardData {
   summary: ProgressSummary;
 }
 
+const DASHBOARD_CHART_MARGIN = { top: 8, right: 8, left: 0, bottom: 0 };
+const CALORIES_COLOR = '#F97316';
+const CALORIES_FORECAST_COLOR = 'rgba(249, 115, 22, 0.45)';
+const MAINTENANCE_COLOR = '#22C55E';
+const PROTEIN_COLOR = '#45d09e';
+const PROTEIN_FORECAST_COLOR = 'rgba(69, 208, 158, 0.45)';
+const BODY_WEIGHT_COLOR = '#38BDF8';
+const BODY_WEIGHT_FORECAST_COLOR = 'rgba(56, 189, 248, 0.45)';
+const TARGET_WEIGHT_COLOR = '#A78BFA';
+const TRAINING_COLOR = '#FACC15';
+const TRAINING_FORECAST_COLOR = 'rgba(250, 204, 21, 0.45)';
+const BAR_RADIUS: [number, number, number, number] = [5, 5, 0, 0];
+
 export default function Dashboard() {
   const today = toIsoDate();
   const [data, setData] = useState<DashboardData | null>(null);
@@ -151,7 +164,13 @@ export default function Dashboard() {
     })),
     ['calories', 'protein'],
   ).map((day) => ({ ...day, maintenanceCalories: stats.maintenanceCalories }));
-  const bodyWeightData = withForecast(data.summary.days, ['bodyWeightKg']);
+  const bodyWeightData = withForecast(
+    data.summary.days.map((day) => ({
+      ...day,
+      targetWeightKg: data.profile.targetWeightKg ?? null,
+    })),
+    ['bodyWeightKg'],
+  ).map((day) => ({ ...day, targetWeightKg: data.profile.targetWeightKg ?? null }));
   const workoutVolumeData = withForecast(data.summary.days, ['workoutVolume']);
   const hasNutritionData = hasMetricData(data.summary.days, ['calories', 'protein']);
   const hasBodyWeightData = hasMetricData(data.summary.days, ['bodyWeightKg']);
@@ -273,38 +292,55 @@ export default function Dashboard() {
               {nutritionTab === 'nutrition' ? (
                 hasNutritionData ? (
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={calorieProteinData}>
+                    <LineChart data={calorieProteinData} margin={DASHBOARD_CHART_MARGIN}>
                       <CartesianGrid strokeDasharray="3 3" opacity={0.18} />
                       <XAxis dataKey="date" tickFormatter={formatShortDate} minTickGap={22} />
-                      <YAxis />
-                      <Tooltip labelFormatter={formatShortDate} />
-                      <Line type="monotone" dataKey="calories" stroke="#ff6b4a" dot={false} strokeWidth={2} />
-                      <Line
-                        type="monotone"
-                        dataKey="caloriesForecast"
-                        stroke="#ff6b4a"
-                        dot={false}
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                        connectNulls
-                      />
-                      <Line type="monotone" dataKey="protein" stroke="#45d09e" dot={false} strokeWidth={2} />
-                      <Line
-                        type="monotone"
-                        dataKey="proteinForecast"
-                        stroke="#45d09e"
-                        dot={false}
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                        connectNulls
-                      />
+                      <YAxis width={42} />
+                      <Tooltip content={<DashboardTooltip />} cursor={{ stroke: 'var(--chart-cursor)', strokeWidth: 1 }} />
                       <Line
                         type="monotone"
                         dataKey="maintenanceCalories"
-                        stroke="#71717a"
+                        name="Maintenance calories"
+                        stroke={MAINTENANCE_COLOR}
+                        dot={false}
+                        strokeWidth={1.8}
+                        strokeDasharray="6 5"
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="calories"
+                        name="Calories"
+                        stroke={CALORIES_COLOR}
+                        dot={false}
+                        strokeWidth={2.4}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="caloriesForecast"
+                        name="Calories forecast"
+                        stroke={CALORIES_FORECAST_COLOR}
                         dot={false}
                         strokeWidth={2}
-                        strokeDasharray="2 6"
+                        strokeDasharray="5 5"
+                        connectNulls
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="protein"
+                        name="Protein"
+                        stroke={PROTEIN_COLOR}
+                        dot={false}
+                        strokeWidth={2.4}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="proteinForecast"
+                        name="Protein forecast"
+                        stroke={PROTEIN_FORECAST_COLOR}
+                        dot={false}
+                        strokeWidth={2}
+                        strokeDasharray="5 5"
+                        connectNulls
                       />
                     </LineChart>
                   </ResponsiveContainer>
@@ -313,16 +349,36 @@ export default function Dashboard() {
                 )
               ) : hasBodyWeightData ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={bodyWeightData}>
+                  <LineChart data={bodyWeightData} margin={DASHBOARD_CHART_MARGIN}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.18} />
                     <XAxis dataKey="date" tickFormatter={formatShortDate} minTickGap={22} />
-                    <YAxis domain={['dataMin - 1', 'dataMax + 1']} />
-                    <Tooltip labelFormatter={formatShortDate} />
-                    <Line type="monotone" dataKey="bodyWeightKg" stroke="#4db7d8" dot={false} strokeWidth={2} />
+                    <YAxis width={42} domain={['dataMin - 1', 'dataMax + 1']} />
+                    <Tooltip content={<DashboardTooltip />} cursor={{ stroke: 'var(--chart-cursor)', strokeWidth: 1 }} />
+                    {data.profile.targetWeightKg ? (
+                      <Line
+                        type="monotone"
+                        dataKey="targetWeightKg"
+                        name="Target weight"
+                        stroke={TARGET_WEIGHT_COLOR}
+                        dot={false}
+                        strokeWidth={1.8}
+                        strokeDasharray="6 5"
+                      />
+                    ) : null}
+                    <Line
+                      type="monotone"
+                      dataKey="bodyWeightKg"
+                      name="Body weight"
+                      stroke={BODY_WEIGHT_COLOR}
+                      dot={{ r: 2.8, fill: BODY_WEIGHT_COLOR, stroke: '#0f172a', strokeWidth: 1 }}
+                      activeDot={{ r: 4 }}
+                      strokeWidth={2.5}
+                    />
                     <Line
                       type="monotone"
                       dataKey="bodyWeightKgForecast"
-                      stroke="#4db7d8"
+                      name="Weight forecast"
+                      stroke={BODY_WEIGHT_FORECAST_COLOR}
                       dot={false}
                       strokeWidth={2}
                       strokeDasharray="5 5"
@@ -346,16 +402,24 @@ export default function Dashboard() {
             >
               {hasWorkoutVolumeData ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={workoutVolumeData}>
+                  <ComposedChart data={workoutVolumeData} margin={DASHBOARD_CHART_MARGIN}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.18} />
                     <XAxis dataKey="date" tickFormatter={formatShortDate} minTickGap={18} />
-                    <YAxis />
-                    <Tooltip labelFormatter={formatShortDate} />
-                    <Bar dataKey="workoutVolume" fill="#f5c451" radius={[6, 6, 0, 0]} />
+                    <YAxis width={42} />
+                    <Tooltip content={<DashboardTooltip />} cursor={{ fill: 'var(--chart-cursor)' }} />
+                    <Bar
+                      dataKey="workoutVolume"
+                      name="Workout volume"
+                      fill={TRAINING_COLOR}
+                      fillOpacity={0.78}
+                      radius={BAR_RADIUS}
+                      isAnimationActive={false}
+                    />
                     <Line
                       type="monotone"
                       dataKey="workoutVolumeForecast"
-                      stroke="#a16207"
+                      name="Volume forecast"
+                      stroke={TRAINING_FORECAST_COLOR}
                       dot={false}
                       strokeWidth={2}
                       strokeDasharray="5 5"
@@ -446,6 +510,60 @@ function CompactEmpty({ title }: { title: string }) {
   );
 }
 
+function DashboardTooltip({
+  active,
+  label,
+  payload,
+}: {
+  active?: boolean;
+  label?: string | number;
+  payload?: Array<{ color?: string; dataKey?: string | number; name?: string; value?: unknown }>;
+}) {
+  if (!active || !payload?.length) return null;
+
+  const rows = payload
+    .map((item) => {
+      const key = String(item.dataKey ?? '');
+      const value = typeof item.value === 'number' ? item.value : null;
+      if (!isDashboardTooltipValue(key, value)) return null;
+
+      return {
+        key,
+        label: item.name ?? dashboardTooltipLabel(key),
+        color: item.color ?? dashboardTooltipColor(key),
+        value: formatDashboardTooltipValue(key, value),
+        reference: key === 'maintenanceCalories' || key === 'targetWeightKg',
+      };
+    })
+    .filter((item): item is { key: string; label: string; color: string; value: string; reference: boolean } => item !== null);
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="max-w-[min(17rem,calc(100vw-2rem))] rounded-lg border border-[var(--chart-tooltip-border)] bg-[var(--chart-tooltip-bg)] p-3 text-[var(--chart-tooltip-text)] shadow-[var(--chart-tooltip-shadow)]">
+      <p className="mb-2 text-xs font-black uppercase tracking-wide text-[var(--chart-tooltip-muted)]">
+        {formatShortDate(String(label ?? ''))}
+      </p>
+      <div className="space-y-1">
+        {rows.map((row) => (
+          <div key={row.key} className="flex items-center justify-between gap-4 text-xs">
+            <span className="flex min-w-0 items-center gap-2">
+              <span
+                className={`h-0 w-4 shrink-0 border-t-2 ${row.reference ? 'border-dashed' : ''}`}
+                style={{ borderColor: row.color }}
+              />
+              <span className="truncate text-[var(--chart-tooltip-muted)]">{row.label}</span>
+            </span>
+            <span className="font-black tabular-nums" style={{ color: row.color }}>
+              {row.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function hasMetricData(rows: object[], keys: string[]) {
   return rows.some((row) =>
     keys.some((key) => {
@@ -453,4 +571,76 @@ function hasMetricData(rows: object[], keys: string[]) {
       return typeof value === 'number' && Number.isFinite(value) && value > 0;
     }),
   );
+}
+
+function isDashboardTooltipValue(key: string, value: number | null): value is number {
+  if (value === null || !Number.isFinite(value)) return false;
+  if (key.toLowerCase().includes('weight')) return value > 0 && value < 1000;
+  if (key.toLowerCase().includes('calories')) return value > 0 && value < 20000;
+  if (key.toLowerCase().includes('protein')) return value > 0 && value < 1000;
+  if (key.toLowerCase().includes('workout') || key.toLowerCase().includes('volume')) {
+    return value > 0 && value < 1_000_000;
+  }
+  return value > 0;
+}
+
+function dashboardTooltipLabel(key: string) {
+  switch (key) {
+    case 'maintenanceCalories':
+      return 'Maintenance calories';
+    case 'calories':
+      return 'Calories';
+    case 'caloriesForecast':
+      return 'Calories forecast';
+    case 'protein':
+      return 'Protein';
+    case 'proteinForecast':
+      return 'Protein forecast';
+    case 'targetWeightKg':
+      return 'Target weight';
+    case 'bodyWeightKg':
+      return 'Body weight';
+    case 'bodyWeightKgForecast':
+      return 'Weight forecast';
+    case 'workoutVolume':
+      return 'Workout volume';
+    case 'workoutVolumeForecast':
+      return 'Volume forecast';
+    default:
+      return key;
+  }
+}
+
+function dashboardTooltipColor(key: string) {
+  switch (key) {
+    case 'maintenanceCalories':
+      return MAINTENANCE_COLOR;
+    case 'calories':
+      return CALORIES_COLOR;
+    case 'caloriesForecast':
+      return CALORIES_FORECAST_COLOR;
+    case 'protein':
+      return PROTEIN_COLOR;
+    case 'proteinForecast':
+      return PROTEIN_FORECAST_COLOR;
+    case 'targetWeightKg':
+      return TARGET_WEIGHT_COLOR;
+    case 'bodyWeightKg':
+      return BODY_WEIGHT_COLOR;
+    case 'bodyWeightKgForecast':
+      return BODY_WEIGHT_FORECAST_COLOR;
+    case 'workoutVolume':
+      return TRAINING_COLOR;
+    case 'workoutVolumeForecast':
+      return TRAINING_FORECAST_COLOR;
+    default:
+      return '#a1a1aa';
+  }
+}
+
+function formatDashboardTooltipValue(key: string, value: number) {
+  if (key.toLowerCase().includes('weight')) return `${round(value, 1).toLocaleString()} kg`;
+  if (key.toLowerCase().includes('protein')) return `${round(value, 1).toLocaleString()} g`;
+  if (key.toLowerCase().includes('calories')) return `${Math.round(value).toLocaleString()} kcal`;
+  return Math.round(value).toLocaleString();
 }

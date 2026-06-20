@@ -336,12 +336,28 @@ export default function Settings() {
           <label className="w-full max-w-48 text-sm font-bold">
             <span className="mb-1 block text-zinc-500 dark:text-zinc-400">Weight kg</span>
             <input
-              className="field w-full"
+              className="field no-spinner w-full"
               type="number"
               min="1"
               step="0.1"
               value={weightInput}
               onChange={(event) => setWeightInput(event.target.value)}
+            />
+          </label>
+          <label className="w-full max-w-48 text-sm font-bold">
+            <span className="mb-1 block text-zinc-500 dark:text-zinc-400">Target weight kg</span>
+            <input
+              className="field no-spinner w-full"
+              type="number"
+              min="1"
+              step="0.1"
+              value={profile.targetWeightKg ?? ''}
+              onChange={(event) =>
+                setProfile({
+                  ...profile,
+                  targetWeightKg: event.target.value === '' ? null : Number(event.target.value),
+                })
+              }
             />
           </label>
           <InlineMetric label="BMI" value={bmi ? String(bmi) : 'Need data'} />

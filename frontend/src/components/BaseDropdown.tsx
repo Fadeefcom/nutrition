@@ -23,6 +23,7 @@ type BaseDropdownProps<T> = {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  triggerClassName?: string;
   menuClassName?: string;
   triggerIcon?: ReactNode;
   searchPlaceholder?: string;
@@ -40,6 +41,7 @@ export function BaseDropdown<T>({
   placeholder = 'Select option',
   disabled = false,
   className = '',
+  triggerClassName = '',
   menuClassName = '',
   triggerIcon,
   searchPlaceholder = 'Search options',
@@ -254,7 +256,7 @@ export function BaseDropdown<T>({
   return (
     <div ref={rootRef} className={`relative min-w-0 ${className}`}>
       <button
-        className="flex min-h-10 w-full items-center justify-between gap-2 rounded-lg border border-[#444] bg-[#222] px-3 text-left text-sm font-semibold text-[#eee] outline-none transition hover:bg-[#262626] focus:border-mint focus:ring-2 focus:ring-mint/30 disabled:cursor-not-allowed disabled:opacity-60"
+        className={`flex min-h-10 w-full items-center justify-between gap-2 rounded-lg border border-[#444] bg-[#222] px-3 text-left text-sm font-semibold text-[#eee] outline-none transition hover:bg-[#262626] focus:border-mint focus:ring-2 focus:ring-mint/30 disabled:cursor-not-allowed disabled:opacity-60 ${triggerClassName}`}
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
