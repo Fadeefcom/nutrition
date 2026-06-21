@@ -1,7 +1,7 @@
-import { Barcode, Camera, Plus, Save, Search, Trash2 } from 'lucide-react';
+import { Plus, Save, Search, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
 import { api } from '../api/client';
+import { BarcodeScannerButton } from '../components/BarcodeScannerButton';
 import { BaseDropdown, type DropdownOption } from '../components/BaseDropdown';
 import { EmptyState } from '../components/EmptyState';
 import { Skeleton } from '../components/Skeleton';
@@ -92,8 +92,6 @@ export default function Products() {
     }
   };
 
-  const [barcodeScannerOpen, setBarcodeScannerOpen] = useState(false);
-
   const searchBarcode = async (overrideCode?: string) => {
     const code = (overrideCode ?? barcode).trim();
     if (!code) return;
@@ -172,39 +170,25 @@ export default function Products() {
           </button>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+        <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
           <input
             className="field"
             value={barcode}
             onChange={(event) => setBarcode(event.target.value)}
             placeholder="Barcode"
           />
-          <div className="flex gap-2">
-            <button
-              className="btn btn-ghost h-10 w-10 shrink-0 px-0"
-              onClick={() => setBarcodeScannerOpen(true)}
-              title="Scan barcode"
-              type="button"
-            >
-              <Camera size={15} />
-            </button>
-            <button className="btn btn-primary" onClick={() => searchBarcode()}>
-              <Barcode size={17} />
-              Lookup
-            </button>
-          </div>
-        </div>
-
-        {barcodeScannerOpen ? (
-          <BarcodeScannerModal
-            onDetect={(code) => {
-              setBarcodeScannerOpen(false);
+          <BarcodeScannerButton
+            onScanSuccess={(code) => {
               setBarcode(code);
               void searchBarcode(code);
             }}
-            onClose={() => setBarcodeScannerOpen(false)}
+            onScanError={(scanError) => setError(scanError.message)}
           />
-        ) : null}
+          <button className="btn btn-ghost" onClick={() => void searchBarcode()}>
+            <Search size={17} />
+            Lookup
+          </button>
+        </div>
 
         {error ? <p className="mt-3 text-sm font-semibold text-ember">{error}</p> : null}
 
@@ -260,6 +244,7 @@ export default function Products() {
             value={form.barcode}
             onChange={(value) => setForm({ ...form, barcode: value })}
             onScan={lookupBarcodeCode}
+            onScanError={(message) => setError(message)}
           />
           <BaseServingControl product={form} onChange={setForm} />
           <NumberInput
@@ -304,44 +289,33 @@ function BarcodeInput({
   value,
   onChange,
   onScan,
+  onScanError,
 }: {
   value: string;
   onChange: (value: string) => void;
   onScan: (code: string) => void;
+  onScanError: (message: string) => void;
 }) {
-  const [scannerOpen, setScannerOpen] = useState(false);
-
   const handleDetect = useCallback(
-    (code: string) => {
-      setScannerOpen(false);
-      onChange(code);
-      onScan(code);
-    },
+    (code: string) => { onChange(code); onScan(code); },
     [onChange, onScan],
   );
 
   return (
     <div className="text-sm font-bold">
       <span className="mb-1 block text-zinc-500 dark:text-zinc-400">Barcode</span>
-      <div className="relative">
+      <div className="flex gap-1">
         <input
-          className="field w-full pr-10"
+          className="field min-w-0 flex-1"
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder="EAN-13, UPC-A, ..."
         />
-        <button
-          className="absolute bottom-0 right-0 top-0 flex items-center px-3 text-zinc-400 transition hover:text-zinc-700 dark:hover:text-zinc-200"
-          type="button"
-          title="Scan with camera"
-          onClick={() => setScannerOpen(true)}
-        >
-          <Camera size={16} />
-        </button>
+        <BarcodeScannerButton
+          onScanSuccess={handleDetect}
+          onScanError={(error) => onScanError(error.message)}
+        />
       </div>
-      {scannerOpen ? (
-        <BarcodeScannerModal onDetect={handleDetect} onClose={() => setScannerOpen(false)} />
-      ) : null}
     </div>
   );
 }
@@ -400,7 +374,7 @@ function BaseServingControl({ product, onChange }: { product: Product; onChange:
         />
         <BaseDropdown
           className="w-24 shrink-0"
-          triggerClassName="h-10 min-h-10 rounded-l-none border-l-0 bg-[#262626] px-2 text-xs hover:bg-[#303030]"
+          triggerClassName="h-10 min-h-10 rounded-l-none border-l-0 px-2 text-xs"
           options={unitOptions}
           value={unit}
           onChange={(nextUnit) => updateBaseServing(serving.amount > 0 ? serving.amount : 1, nextUnit)}

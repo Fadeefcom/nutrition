@@ -1,6 +1,5 @@
 import {
   Barcode,
-  Camera,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -9,11 +8,11 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
 import { motion } from 'framer-motion';
 import type { FormEvent } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api/client';
+import { BarcodeScannerButton } from '../components/BarcodeScannerButton';
 import { BaseDropdown, type DropdownOption } from '../components/BaseDropdown';
 import { EmptyState } from '../components/EmptyState';
 import { ProgressRing } from '../components/ProgressRing';
@@ -74,7 +73,6 @@ export default function Nutrition() {
   const [nutritionSaving, setNutritionSaving] = useState(false);
   const [productSaving, setProductSaving] = useState(false);
   const [barcodeLoading, setBarcodeLoading] = useState(false);
-  const [barcodeScannerOpen, setBarcodeScannerOpen] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const dateInputRef = useRef<HTMLInputElement | null>(null);
@@ -313,14 +311,14 @@ export default function Nutrition() {
                 );
               }}
             />
-            <button
-              className="btn btn-ghost h-10 w-10 shrink-0 px-0"
-              onClick={() => setBarcodeScannerOpen(true)}
-              title="Scan barcode"
-              type="button"
-            >
-              <Camera size={15} />
-            </button>
+            <BarcodeScannerButton
+              size="compact"
+              onScanSuccess={(code) => {
+                setProductQuery(code);
+                lookupBarcode(code);
+              }}
+              onScanError={(scanError) => setError(scanError.message)}
+            />
           </div>
 
           <input
@@ -369,16 +367,6 @@ export default function Nutrition() {
           />
         ) : null}
 
-        {barcodeScannerOpen ? (
-          <BarcodeScannerModal
-            onDetect={(code) => {
-              setBarcodeScannerOpen(false);
-              setProductQuery(code);
-              lookupBarcode(code);
-            }}
-            onClose={() => setBarcodeScannerOpen(false)}
-          />
-        ) : null}
       </section>
 
       <section className="panel relative z-0 p-4">
@@ -901,7 +889,7 @@ function QuantityControlGroup({
       </label>
       <BaseDropdown
         className="w-24 shrink-0"
-        triggerClassName="h-10 min-h-10 rounded-l-none border-l-0 bg-[#262626] px-2 text-xs hover:bg-[#303030]"
+        triggerClassName="h-10 min-h-10 rounded-l-none border-l-0 px-2 text-xs"
         menuClassName="min-w-36"
         options={servingOptions}
         value={product ? servingOptionId : ''}

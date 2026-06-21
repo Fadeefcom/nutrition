@@ -187,7 +187,7 @@ export function BaseDropdown<T>({
   const menu = open ? (
     <div
       ref={menuRef}
-      className={`flex flex-col overflow-hidden rounded-lg border border-black/10 bg-white text-zinc-900 shadow-[0_18px_45px_rgba(15,23,42,0.14)] dark:border-white/10 dark:bg-[#191b1f] dark:text-zinc-100 dark:shadow-[0_18px_45px_rgba(0,0,0,0.38)] ${menuClassName}`}
+      className={`flex flex-col overflow-hidden rounded-lg border border-black/10 bg-white text-zinc-900 shadow-[0_18px_45px_rgba(15,23,42,0.14)] dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100 dark:shadow-[0_18px_45px_rgba(0,0,0,0.38)] ${menuClassName}`}
       style={menuStyle}
     >
       {shouldSearch ? (
@@ -246,7 +246,7 @@ export function BaseDropdown<T>({
       </div>
 
       {footer ? (
-        <div className="shrink-0 border-t border-black/10 bg-white p-2 dark:border-white/10 dark:bg-[#191b1f]">
+        <div className="shrink-0 border-t border-black/10 bg-white p-2 dark:border-white/10 dark:bg-zinc-900">
           {footer({ searchQuery, close })}
         </div>
       ) : null}

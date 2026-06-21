@@ -1,0 +1,272 @@
+:root {
+  color-scheme: dark;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  background: #111315;
+  color: #f4f4f5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.app {
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 28px;
+  line-height: 1;
+}
+
+h2 {
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: #a1a1aa;
+}
+
+.toolbar p {
+  margin-top: 8px;
+  color: #a1a1aa;
+  font-size: 14px;
+}
+
+.upload {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  padding: 0 14px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.upload input {
+  display: none;
+}
+
+.toolbar button.upload {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.dropzone {
+  display: grid;
+  min-height: 360px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #a1a1aa;
+}
+
+.dropzone img {
+  display: block;
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+}
+
+.cameraPanel {
+  margin-top: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.cameraHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.cameraHeader span {
+  color: #a1a1aa;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.cameraViewport {
+  position: relative;
+  width: min(100%, 520px);
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #050505;
+}
+
+.cameraViewport video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.cameraViewfinder {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(88%, 430px);
+  --scan-travel: calc((min(88vw, 430px) / 1.65) - 48px);
+  aspect-ratio: 1.65 / 1;
+  transform: translate(-50%, -50%);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 16px;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.36);
+  pointer-events: none;
+}
+
+.corner {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border-color: #45d09e;
+}
+
+.topLeft {
+  left: -2px;
+  top: -2px;
+  border-left: 4px solid #45d09e;
+  border-top: 4px solid #45d09e;
+  border-top-left-radius: 16px;
+}
+
+.topRight {
+  right: -2px;
+  top: -2px;
+  border-right: 4px solid #45d09e;
+  border-top: 4px solid #45d09e;
+  border-top-right-radius: 16px;
+}
+
+.bottomLeft {
+  bottom: -2px;
+  left: -2px;
+  border-bottom: 4px solid #45d09e;
+  border-left: 4px solid #45d09e;
+  border-bottom-left-radius: 16px;
+}
+
+.bottomRight {
+  bottom: -2px;
+  right: -2px;
+  border-bottom: 4px solid #45d09e;
+  border-right: 4px solid #45d09e;
+  border-bottom-right-radius: 16px;
+}
+
+@keyframes barcode-scan {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(var(--scan-travel));
+  }
+}
+
+.barcodeScanLine {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 20px;
+  height: 2px;
+  border-radius: 999px;
+  background: #45d09e;
+  box-shadow: 0 0 18px rgba(69, 208, 158, 0.9);
+  animation: barcode-scan 1.8s ease-in-out infinite;
+}
+
+.status {
+  margin: 18px 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.status p {
+  font-weight: 800;
+}
+
+pre {
+  overflow-x: auto;
+  margin: 12px 0 0;
+  border-radius: 8px;
+  padding: 12px;
+  background: #050505;
+  color: #45d09e;
+}
+
+.debug {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.debug > div {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  background: #050505;
+}
+
+@media (max-width: 760px) {
+  .app {
+    padding: 14px;
+  }
+
+  .toolbar,
+  .debug {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .cameraViewport {
+    width: 100%;
+  }
+}
